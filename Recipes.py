@@ -28,9 +28,6 @@ class Recipes:
         thread=threading.Thread(target=lambda: self.animate(temp_frame), daemon=True)
         thread.start()
         self._threads.append(thread)
-        self._received_massage=True
-        self._recipes_window.pack(fill="both",expand=True)
-
     #return the scrollable frame in recieve massage
 
     def animate(self,temp_frame):
