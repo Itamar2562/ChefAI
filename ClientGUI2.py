@@ -15,7 +15,7 @@ class ClientStatue:
         self.connected=False
         self.signed_in=False
 
-#automatic logout if disconnected
+#automatic logout if disconnect *test
 
 class ClientGUI:
     def __init__(self,ip,port):
