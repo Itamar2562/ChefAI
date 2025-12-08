@@ -11,9 +11,6 @@ class ClientBL:
 
         #add a time var to save time and do it as time+amount of pref+pref+amount of param+param
 
-        #help pelp
-        #do od
-        #[5,type1,9,type2]
 
         self.client_socket=None
         self.fernet=None
