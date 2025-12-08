@@ -110,6 +110,7 @@ class SignIn:
             self._password_entry.configure(show="")
             self._btn_password_visible.configure(image=self._open_eye_image)
             self._password_visible = True
+            
     def on_click_signin(self):
         self._username = self._username_entry.get()
         self._password = self._password_entry.get()

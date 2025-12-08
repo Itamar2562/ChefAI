@@ -96,7 +96,6 @@ class ClientGUI:
 
         self._time_slider = CTkSlider(master=self._home,from_=10,to=120,orientation="horizontal",width=300,number_of_steps=22,command=self._change_slider_time)
         self._time_slider.set(10)
-        self._client_bl.parameters.append(10) #set the first parameter to cooking time
         self._time_slider.place(x=200,y=465)
 
         self._cooking_time=CTkLabel(master=self._home, text="Cooking time: 10.0min",text_color="white", font=("Calibri",20))
@@ -174,8 +173,7 @@ class ClientGUI:
         if not self._client_status.connected or not  self._client_status.signed_in or self.ingredients.is_editing():
             return
         cmd="MAKE"
-        self._client_bl.parameters[0]=self._time_slider.get()
-        args=self._client_bl.parameters
+        args=self._client_bl.get_parameters(self._time_slider.get())
         self._client_bl.send_data(cmd,args)
         self._home.pack_forget()
         self._recipes=Recipes(self._container,self._home,self._client_status,self._client_bl.receive_msg)
@@ -244,7 +242,7 @@ class ClientGUI:
         self._level.configure(text=Levels[level_msg])
         self._level.place(x=5,y=25)
 
-
+    #do a function of update_greeting instead (it will update auto not return str)
     def get_greeting(self) ->str:
         if not self._client_status.connected or not self._client_status.signed_in:
             name= "guest"
@@ -268,28 +266,28 @@ class ClientGUI:
 
     def on_click_vegetarian(self):
         self._btn_vegetarian.configure(state="disabled")
-        self._client_bl.add_parameters("vegetarian")
+        self._client_bl.add_preference_parameters("vegetarian")
     def on_click_vegan(self):
         self._btn_vegan.configure(state="disabled")
-        self._client_bl.add_parameters("vegan")
+        self._client_bl.add_preference_parameters("vegan")
     def on_click_halal(self):
         self._btn_halal.configure(state="disabled")
-        self._client_bl.add_parameters("halal")
+        self._client_bl.add_preference_parameters("halal")
     def on_click_kosher(self):
         self._btn_kosher.configure(state="disabled")
-        self._client_bl.add_parameters("kosher")
+        self._client_bl.add_preference_parameters("kosher")
     def on_click_soup(self):
         self._btn_soup.configure(state="disabled")
-        self._client_bl.add_parameters("soup")
+        self._client_bl.add_food_type_parameters("soup")
     def on_click_oven(self):
         self._btn_oven.configure(state="disabled")
-        self._client_bl.add_parameters("oven")
+        self._client_bl.add_food_type_parameters("oven")
     def on_click_dessert(self):
         self._btn_dessert.configure(state="disabled")
-        self._client_bl.add_parameters("dessert")
+        self._client_bl.add_food_type_parameters("dessert")
     def on_click_fried(self):
         self._btn_fried.configure(state="disabled")
-        self._client_bl.add_parameters("fried")
+        self._client_bl.add_food_type_parameters("fried")
 
 
     def _change_slider_time(self,value):
