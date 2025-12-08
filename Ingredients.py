@@ -1,8 +1,4 @@
-
 from Protocol import *
-
-#ctkxyframe
-
 
 class Ingredients:
     def __init__(self,home_window,add_btn,ingredients_frame,client_status,callback_send_data,callback_receive_confirmation):
@@ -16,7 +12,6 @@ class Ingredients:
         self.callback_send_data=callback_send_data
         self.callback_receive_confirmation=callback_receive_confirmation
         self.previous_ingredient=""
-
 
     def add_ingredient(self):
         self.callback_add_btn("disabled")

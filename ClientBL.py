@@ -5,34 +5,23 @@ class ClientBL:
     def __init__(self,ip,port):
         self.ip = ip
         self.port = port
-        self.food_type_parameters=[0]
-        self.preference_parameters=[0]
-        self.ingredients=[]
-
-        #add a time var to save time and do it as time+amount of pref+pref+amount of param+param
-
-
+        self.parameters={'time':10.0,'type':[], 'preference':[]}
         self.client_socket=None
         self.fernet=None
     def reset_parameters(self,time_slider):
-        self.food_type_parameters.clear()
-        self.food_type_parameters.append(0)
-        self.preference_parameters.clear()
-        self.preference_parameters.append(0)
+        self.parameters['time']=10.0
+        self.parameters['type'].clear()
+        self.parameters['preference'].clear()
 
     def add_food_type_parameters(self,parameter):
-        self.food_type_parameters.append(parameter)
-        self.food_type_parameters[0]+=1
+        self.parameters['type'].append(parameter)
 
     def add_preference_parameters(self,parameter):
-        self.preference_parameters.append(parameter)
-        self.preference_parameters[0]+=1
+        self.parameters['preference'].append(parameter)
 
     def get_parameters(self,time):
-        return [time]+self.food_type_parameters+self.preference_parameters
-
-    def add_ingredients(self,ingredient):
-        self.ingredients.append(ingredient)
+        self.parameters['time']=time
+        return self.parameters
 
     def connect(self):
         try:

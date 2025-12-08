@@ -111,20 +111,10 @@ class ClientHandler(threading.Thread):
     #then I will run the loop for the amount+skipped parts e.g. 2+3=5 -> 2:5 will get 3 ingredients
     def handle_make(self,data):
         data=json.loads(data)
-        food_type=[]
-        preference=[]
-        time=data[0]
-        food_type_length=data[1]
-        for i in range(2,food_type_length+2):
-            food_type.append(data[i])
-        preference_length=data[food_type_length+2]
-        for i in range(3+food_type_length,3+food_type_length+preference_length):
-            preference.append(data[i])
-        write_to_log(time)
-        write_to_log(food_type_length)
-        write_to_log(food_type)
-        write_to_log(preference_length)
-        write_to_log(preference)
+        write_to_log(data['time'])
+        write_to_log(data['type'])
+        write_to_log(data['preference'])
+
 
 
 
