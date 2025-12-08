@@ -46,7 +46,6 @@ class ClientBL:
             write_to_log("[Client_BL] attempting to connect...")
             return False
 
-
     def handle_first_handshake(self):
         pem_public_key=self.receive_msg(True)
         public_key = serialization.load_pem_public_key(pem_public_key,backend=default_backend())

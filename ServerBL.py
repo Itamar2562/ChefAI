@@ -25,7 +25,8 @@ class ServerBL:
                 client.start()
                 self._client_handler.append(client)
                 write_to_log(f"[SERVER_BL] ACTIVE CONNECTION {threading.active_count() - 2}")
-            except:
+            except Exception as e:
+                write_to_log(e)
                 break
 
     def stop_server(self):
@@ -73,7 +74,9 @@ class ClientHandler(threading.Thread):
                cmd,data=self.receive_msg()
                write_to_log(f"cmd: {cmd}!")
                write_to_log(f"msg {data}")
-               if check_cmd(cmd)==2:
+               if check_cmd(cmd)==1:
+                   self.handle_make(data)
+               elif check_cmd(cmd)==2:
                    self.handle_db_login_msg(cmd,data)
                elif check_cmd(cmd)==3:
                    self.handle_ingredients(cmd,data)
@@ -102,6 +105,30 @@ class ClientHandler(threading.Thread):
         elif cmd == "DELETE":
             response = self.remove_ingredient_from_db(data)
             self.send_data("DELETE",response)
+
+    #data will look like this [10.0, 3, "fried", "oven", "soup", 3, "halal", "vegan", "kosher"]
+    #to separate the data I will get length and skip time with it
+    #then I will run the loop for the amount+skipped parts e.g. 2+3=5 -> 2:5 will get 3 ingredients
+    def handle_make(self,data):
+        data=json.loads(data)
+        food_type=[]
+        preference=[]
+        time=data[0]
+        food_type_length=data[1]
+        for i in range(2,food_type_length+2):
+            food_type.append(data[i])
+        preference_length=data[food_type_length+2]
+        for i in range(3+food_type_length,3+food_type_length+preference_length):
+            preference.append(data[i])
+        write_to_log(time)
+        write_to_log(food_type_length)
+        write_to_log(food_type)
+        write_to_log(preference_length)
+        write_to_log(preference)
+
+
+
+
 
     def handle_first_handshake(self):
         private_key=rsa.generate_private_key(public_exponent=65537, key_size=1024)
