@@ -1,4 +1,4 @@
 customtkinter
-google-genai
+google
 cryptography
 pillow

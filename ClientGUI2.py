@@ -85,7 +85,8 @@ class ClientGUI:
         self._home.pack(fill="both", expand=True)
 
         #I will change greeting
-        self._greeting=CTkLabel(master=self._home,text=self.get_greeting(), font=('Calibri', 20), anchor='w')
+        self._greeting=CTkLabel(master=self._home, font=('Calibri', 20), anchor='w')
+        self.update_greeting()
         self._greeting.place(x=5,y=0)
         self._ChefAI = CTkLabel(master=self._home, text="ChefAI", font=('Calibri', 50))
         self._ChefAI.place(x=410, y=0)
@@ -125,7 +126,6 @@ class ClientGUI:
         self._btn_fried = CTkButton(master=self._home, text="Fried", font=SMALL_FONT_BUTTON, fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_fried)
         self._btn_fried.place(x=105, y=425)
 
-
         self._btn_add=CTkButton(master=self._home,text="Add",font=("Calibri",17), fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_add)
         self._ingredients_frame=CTkScrollableFrame(master=self._home, width=300, height=300)
 
@@ -162,7 +162,7 @@ class ClientGUI:
             self._ingredients_frame.place_forget()
         if self._level and self._level.winfo_ismapped():
             self._level.place_forget()
-        self._greeting.configure(text=self.get_greeting())
+        self.update_greeting()
         self._username=""
         self._btn_sign_out.place_forget()
         self._btn_login.place(x=915, y=10)
@@ -215,7 +215,7 @@ class ClientGUI:
         self._client_status.signed_in=False
         self._btn_sign_out.place_forget()
         self._btn_login.place(x=915, y=10)
-        self._greeting.configure(text=self.get_greeting())
+        self.update_greeting()
         self.initiate_disconnected_home()
         self._client_bl.send_data("SIGN_OUT","")
 
@@ -233,7 +233,7 @@ class ClientGUI:
         ingredient_list = json.loads(ingredient_list)
         for i in ingredient_list:
             self.ingredients.initiate_first_ingredients(i)
-        self._greeting.configure(text=self.get_greeting())
+        self.update_greeting()
         self._btn_login.place_forget()
         self._btn_sign_out.place(x=915, y=10)
         self._btn_add.place(x=10,y=60)
@@ -243,13 +243,13 @@ class ClientGUI:
         self._level.place(x=5,y=25)
 
     #do a function of update_greeting instead (it will update auto not return str)
-    def get_greeting(self) ->str:
+    def update_greeting(self):
         if not self._client_status.connected or not self._client_status.signed_in:
             name= "guest"
         else:
             name=self._username
         time=get_time_greeting()
-        return f"{time} {name}."
+        self._greeting.configure(text=f"{time} {name}.")
 
     def on_click_reset(self):
         self._btn_vegetarian.configure(state="normal")

@@ -1,5 +1,6 @@
 from Protocol import *
 from Database import *
+from Server_AI import *
 class ServerBL:
     def __init__(self, ip: str, port: int):
         self._ip = ip
@@ -114,6 +115,12 @@ class ClientHandler(threading.Thread):
         write_to_log(data['time'])
         write_to_log(data['type'])
         write_to_log(data['preference'])
+        ingredients=get_ingredients_list(self._current_id)
+        ingredients=json.dumps(ingredients)
+        for t in data['type']:
+            write_to_log(t)
+            ai_response=send_and_receive_ai_request(data['time'],t,data['preference'], ingredients)
+            write_to_log(ai_response)
 
 
 
