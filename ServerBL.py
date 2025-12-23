@@ -117,10 +117,16 @@ class ClientHandler(threading.Thread):
         write_to_log(data['preference'])
         ingredients=get_ingredients_list(self._current_id)
         ingredients=json.dumps(ingredients)
-        for t in data['type']:
-            write_to_log(t)
-            ai_response=send_and_receive_ai_request(data['time'],t,data['preference'], ingredients)
+        #in client receive create a receive loop getting it one by one
+        if len(data['type'])==0:
+            ai_response=send_and_receive_ai_request(data['time'],"general",data['preference'], ingredients)
             write_to_log(ai_response)
+            self.send_data("AI",ai_response)
+        else:
+            ai_response=send_and_receive_ai_request(data['time'],data['type'],data['preference'], ingredients)
+            write_to_log(ai_response)
+            self.send_data("AI",ai_response)
+        self.send_data("AI","END")
 
 
 
