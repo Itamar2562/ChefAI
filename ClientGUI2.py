@@ -174,7 +174,7 @@ class ClientGUI:
             return
         cmd="MAKE"
         args=self._client_bl.get_parameters(self._time_slider.get())
-        self._client_bl.send_data(cmd,args)
+        #self._client_bl.send_data(cmd,args)
         self._home.pack_forget()
         self._recipes=Recipes(self._container,self._home,self._client_status,self._client_bl.receive_msg)
         self._recipes.create_ui()
