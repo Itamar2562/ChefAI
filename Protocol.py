@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import serialization,hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.fernet import Fernet
 import json
+from PIL import Image
 
 
 SERVER_IP="0.0.0.0"
@@ -17,7 +18,7 @@ BUFFER_SIZE = 1024
 HEADER_LEN = 4
 FORMAT= 'utf-8'
 DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
-INGREDIENTS_CMD=["ADD","DELETE"]
+INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL"]
 Levels={
     '1':"Rookie",
     '2': "Novice",

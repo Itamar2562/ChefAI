@@ -51,6 +51,7 @@ class ClientGUI:
         self._time_slider=None
         self._btn_make=None
         self._btn_add=None
+        self._clear_btn=None
         self._cooking_time=None
         self._username=""
         self._login = None
@@ -63,8 +64,6 @@ class ClientGUI:
         self._connection = threading.Thread(target=self.connect_on_startup, daemon=True)
         self._connection.start()
 
-        #temp solution
-        self.temp=0
         self._client_status = ClientStatue()
 
         self._ingredients_frame=None
@@ -88,7 +87,7 @@ class ClientGUI:
         self._greeting=CTkLabel(master=self._home, font=('Calibri', 20), anchor='w')
         self.update_greeting()
         self._greeting.place(x=5,y=0)
-        self._ChefAI = CTkLabel(master=self._home, text="ChefAI", font=('Calibri', 50))
+        self._ChefAI = CTkLabel(master=self._home, text="ChefAI", font=('Calibri', 50,"bold","underline"))
         self._ChefAI.place(x=410, y=0)
 
         self._btn_make=CTkButton(master=self._home, text="Make!", font=("Calibri",30), fg_color="#FF991C", hover_color="#DB8318",height=60,width=150, command=self.on_click_make)
@@ -127,6 +126,8 @@ class ClientGUI:
         self._btn_fried.place(x=105, y=425)
 
         self._btn_add=CTkButton(master=self._home,text="Add",font=("Calibri",17), fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_add)
+        self._clear_btn = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#C850C0",hover_color="#4185D0", font=("Arial",17),command=self.on_click_delete_all_btn)
+
         self._ingredients_frame=CTkScrollableFrame(master=self._home, width=300, height=300)
 
         self._level=CTkLabel(master=self._home, font=("Calibri",25))
@@ -145,7 +146,7 @@ class ClientGUI:
         while True:
             if not self._client_status.connected:
                 connected_text.configure(text="Not connected",text_color="red")
-                self.initiate_disconnected_home()
+                self.initiate_disconnected_home() # very bado
                 self._client_status.connected=self._client_bl.connect()
             else:
                 connected_text.configure(text="connected",text_color="green")
@@ -155,26 +156,25 @@ class ClientGUI:
         self.ingredients.add_ingredient()
 
     def initiate_disconnected_home(self):
-        if self._btn_add and self._btn_add.winfo_ismapped():
-            self._btn_add.place_forget()
-        if self._ingredients_frame and self._ingredients_frame.winfo_ismapped():
-            self.ingredients.clear_ingredients()
-            self._ingredients_frame.place_forget()
-        if self._level and self._level.winfo_ismapped():
-            self._level.place_forget()
+        self.forget_widget(self._btn_add)
+        self.forget_widget(self._ingredients_frame)
+        self.forget_widget(self._level)
+        self.forget_widget(self._btn_sign_out)
         self.update_greeting()
         self._username=""
-        self._btn_sign_out.place_forget()
         self._btn_login.place(x=915, y=10)
 
+    def forget_widget(self,widget):
+        if widget and widget.winfo_ismapped():
+            widget.place_forget()
 
     def on_click_make(self):
-        #only send data if client is connected
+        #only send data if client is connected maybe simply make btn disabled for furture
         if not self._client_status.connected or not  self._client_status.signed_in or self.ingredients.is_editing():
             return
         cmd="MAKE"
         args=self._client_bl.get_parameters(self._time_slider.get())
-        #self._client_bl.send_data(cmd,args)
+        self._client_bl.send_data(cmd,args)
         self._home.pack_forget()
         self._recipes=Recipes(self._container,self._home,self._client_status,self._client_bl.receive_msg)
         self._recipes.create_ui()
@@ -234,13 +234,22 @@ class ClientGUI:
         for i in ingredient_list:
             self.ingredients.initiate_first_ingredients(i)
         self.update_greeting()
-        self._btn_login.place_forget()
+        self.forget_widget(self._btn_login)
         self._btn_sign_out.place(x=915, y=10)
         self._btn_add.place(x=10,y=60)
         self._ingredients_frame.place(x=0,y=100)
         level_msg = self._client_bl.receive_msg()
         self._level.configure(text=Levels[level_msg])
         self._level.place(x=5,y=25)
+        self._clear_btn.place(x=100,y=60)
+
+    def on_click_delete_all_btn(self):
+        self._client_bl.send_data("DELETE_ALL","")
+        succeed=bool(self._client_bl.receive_msg())
+        if succeed:
+            self.ingredients.clear_ingredients()
+            self._btn_add.configure(state="normal")
+
 
     #do a function of update_greeting instead (it will update auto not return str)
     def update_greeting(self):

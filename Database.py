@@ -152,6 +152,28 @@ def remove_ingredient(user_id,ingredient):
         conn.rollback()
         return False
 
+def remove_all_ingredients(user_id):
+    conn = sqlite3.connect("MyProject.db")
+    curser = conn.cursor()
+    try:
+        query = "SELECT ingredients FROM users WHERE id= ?"
+        curser.execute(query, (user_id,))
+        ingredients_list = curser.fetchone()[0]
+        ingredients_list = json.loads(ingredients_list)
+        ingredients_list.clear()
+        ingredients_list = json.dumps(ingredients_list)
+        query = "UPDATE users SET ingredients = ? WHERE id = ?"
+        curser.execute(query, (ingredients_list, user_id))
+        # confirm and save data to DB
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as E:
+        write_to_log(E)
+        conn.rollback()
+        return False
+
+
 
 def get_level_by_id(user_id):
     conn = sqlite3.connect("MyProject.db")

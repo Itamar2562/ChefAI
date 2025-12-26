@@ -1,11 +1,4 @@
-from atexit import register
-from ctypes import c_wchar
-
-from PIL.ImageOps import expand
-
 from Protocol import *
-from PIL import Image
-
 
 # class for signin will add switching frame inside register, home button and backtoreg btn
 class SignIn:
@@ -42,7 +35,7 @@ class SignIn:
         self._open_eye_image = CTkImage(Image.open(r"Images\open_eye.png"), size=(20, 20))
         self._close_eye_image = CTkImage(Image.open(r"Images\close_eye.png"), size=(20, 20))
 
-        self._login_text = CTkLabel(master=self._signin_window, text="Sign in", font=('Calibri', 50))
+        self._login_text = CTkLabel(master=self._signin_window, text="Sign in", font=('Calibri', 50,"bold","underline"))
         self._login_text.place(x=435, y=50)
 
         self._username_entry = CTkEntry(self._signin_window, placeholder_text="enter username")
@@ -174,7 +167,7 @@ class Register:
         self._close_eye_image=CTkImage(Image.open(r"Images\close_eye.png"),size=(20,20))
 
 
-        self._login_text=CTkLabel(master=self._register_window,text="Register",font=('Calibri', 50))
+        self._login_text=CTkLabel(master=self._register_window,text="Register",font=('Calibri', 50,"bold","underline"))
         self._login_text.place(x=415,y=50)
 
         self._username_entry=CTkEntry(self._register_window, placeholder_text="enter username")

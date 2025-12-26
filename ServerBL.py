@@ -1,3 +1,6 @@
+from http.client import responses
+from logging import exception
+
 from Protocol import *
 from Database import *
 from Server_AI import *
@@ -73,13 +76,14 @@ class ClientHandler(threading.Thread):
         while not self._stop_event.is_set():
             try:
                cmd,data=self.receive_msg()
-               write_to_log(f"cmd: {cmd}!")
-               write_to_log(f"msg {data}")
+               write_to_log(f"cmd:{cmd}!")
+               write_to_log(f"msg:{data}!")
                if check_cmd(cmd)==1:
                    self.handle_make(data)
                elif check_cmd(cmd)==2:
                    self.handle_db_login_msg(cmd,data)
                elif check_cmd(cmd)==3:
+                   write_to_log("got here2")
                    self.handle_ingredients(cmd,data)
             except:
                 if not self.check_conn():
@@ -100,12 +104,16 @@ class ClientHandler(threading.Thread):
             self.initiate_sign_in(data)
 
     def handle_ingredients(self,cmd,data):
+        write_to_log("got here maybe")
         if cmd == "ADD":
             response = self.add_ingredient_to_db(data)
             self.send_data("ADD",response)
         elif cmd == "DELETE":
             response = self.remove_ingredient_from_db(data)
             self.send_data("DELETE",response)
+        elif cmd=="DELETE_ALL":
+            response=self.remove_all_ingredients_from_db()
+            self.send_data("DELETE_ALL",response)
 
     #data will look like this [10.0, 3, "fried", "oven", "soup", 3, "halal", "vegan", "kosher"]
     #to separate the data I will get length and skip time with it
@@ -171,6 +179,13 @@ class ClientHandler(threading.Thread):
 
     def remove_ingredient_from_db(self,ingredient):
         succeed=remove_ingredient(self._current_id,ingredient)
+        if succeed:
+            return "True"
+        return "False"
+
+    def remove_all_ingredients_from_db(self):
+        write_to_log("got here")
+        succeed=remove_all_ingredients(self._current_id)
         if succeed:
             return "True"
         return "False"

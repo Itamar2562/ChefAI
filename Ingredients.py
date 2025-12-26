@@ -84,6 +84,7 @@ class Ingredients:
             f.after(0, f.destroy)
         self.frames.clear()
         self.entries.clear()
+        self.is_currently_editing=False
 
     def destroy_frame(self,current_frame,current_entry):
         current_frame.destroy()
@@ -96,7 +97,7 @@ class Ingredients:
         #dont let users delete other ing when editing another one
         current_state=current_entry.cget("state")
         #dont let user delete other ing when editing
-        if self.is_currently_editing and current_state=="disabled":
+        if self.is_currently_editing:
             return
         data=current_entry.get()
         if data !="":
