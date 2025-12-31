@@ -23,8 +23,9 @@ Levels={
     '1':"Rookie",
     '2': "Novice",
     '3':"Expert"
-
 }
+
+DIFFICULTY_COLORS={'easy':'green','medium':'orange','hard':'red'}
 
 
 # prepare Log file

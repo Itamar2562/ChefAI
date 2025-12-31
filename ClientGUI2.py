@@ -16,7 +16,7 @@ class ClientStatue:
         self.signed_in=False
 
 #automatic logout if disconnect *test 2 54
-
+#do nutritional facts brodi
 class ClientGUI:
     def __init__(self,ip,port):
         self._client_bl=ClientBL(ip,port)
@@ -39,11 +39,7 @@ class ClientGUI:
         self._btn_halal=None
         self._btn_kosher=None
 
-        self._btn_soup=None
-        self._btn_oven=None
-        self._btn_fried=None
-        self._btn_dessert=None
-
+        self._food_types=None
 
         self._btn_reset=None
         self._btn_login=None
@@ -51,7 +47,7 @@ class ClientGUI:
         self._time_slider=None
         self._btn_make=None
         self._btn_add=None
-        self._clear_btn=None
+        self._btn_clear=None
         self._cooking_time=None
         self._username=""
         self._login = None
@@ -113,20 +109,11 @@ class ClientGUI:
         self._btn_kosher=CTkButton(master=self._home,text="Kosher", font=SMALL_FONT_BUTTON,fg_color="#C850C0", hover_color="#4185D0",height=30,width=80,command=self.on_click_kosher)
         self._btn_kosher.place(x=590, y=460)
 
-        self._btn_soup=CTkButton(master=self._home,text="Soup", font=SMALL_FONT_BUTTON,fg_color="#C850C0", hover_color="#4185D0",height=30,width=80,command=self.on_click_soup)
-        self._btn_soup.place(x=20, y=465)
-
-        self._btn_oven = CTkButton(master=self._home, text="Oven", font=SMALL_FONT_BUTTON, fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_oven)
-        self._btn_oven.place(x=105, y=465)
-
-        self._btn_dessert = CTkButton(master=self._home, text="Dessert", font=SMALL_FONT_BUTTON, fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_dessert)
-        self._btn_dessert.place(x=20, y=425)
-
-        self._btn_fried = CTkButton(master=self._home, text="Fried", font=SMALL_FONT_BUTTON, fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_fried)
-        self._btn_fried.place(x=105, y=425)
+        self._food_types=CTkOptionMenu(master=self._home,values=["general","salad","dessert","sandwich","fried","soup","Grilled","baked"])
+        self._food_types.place(x=20,y=460)
 
         self._btn_add=CTkButton(master=self._home,text="Add",font=("Calibri",17), fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_add)
-        self._clear_btn = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#C850C0",hover_color="#4185D0", font=("Arial",17),command=self.on_click_delete_all_btn)
+        self._btn_clear = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#C850C0",hover_color="#4185D0", font=("Arial",17),command=self.on_click_delete_all_btn)
 
         self._ingredients_frame=CTkScrollableFrame(master=self._home, width=300, height=300)
 
@@ -154,12 +141,20 @@ class ClientGUI:
 
     def on_click_add(self):
         self.ingredients.add_ingredient()
+        canvas = self._ingredients_frame._parent_canvas
+        canvas.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        self._ingredients_frame._parent_canvas.yview_moveto(1.0)
 
     def initiate_disconnected_home(self):
         self.forget_widget(self._btn_add)
         self.forget_widget(self._ingredients_frame)
         self.forget_widget(self._level)
         self.forget_widget(self._btn_sign_out)
+        self.forget_widget(self._btn_clear)
+        self.on_click_reset()
+        if self.ingredients:
+            self.ingredients.clear_ingredients()
         self.update_greeting()
         self._username=""
         self._btn_login.place(x=915, y=10)
@@ -170,6 +165,7 @@ class ClientGUI:
 
     def on_click_make(self):
         #only send data if client is connected maybe simply make btn disabled for furture
+        self._client_bl.add_food_type_parameters(self._food_types.get())
         if not self._client_status.connected or not  self._client_status.signed_in or self.ingredients.is_editing():
             return
         cmd="MAKE"
@@ -202,7 +198,6 @@ class ClientGUI:
             #now I just check it manually
             #also see if client status is even needed
             #also create different functions for switching frames and send them so there is a clean switching IMPORTANT (kinda did it having a problem with cleaning entry)
-            self._login.print_database_msg(msg)
         self._home.pack_forget()
         #create only one login class that will hold user username and password for later use.
         if not self._login:
@@ -241,7 +236,8 @@ class ClientGUI:
         level_msg = self._client_bl.receive_msg()
         self._level.configure(text=Levels[level_msg])
         self._level.place(x=5,y=25)
-        self._clear_btn.place(x=100,y=60)
+        self._btn_clear.place(x=100,y=60)
+        self.on_click_reset()
 
     def on_click_delete_all_btn(self):
         self._client_bl.send_data("DELETE_ALL","")
@@ -265,11 +261,9 @@ class ClientGUI:
         self._btn_vegan.configure(state="normal")
         self._btn_kosher.configure(state="normal")
         self._btn_halal.configure(state="normal")
-        self._btn_soup.configure(state="normal")
-        self._btn_oven.configure(state="normal")
-        self._btn_dessert.configure(state="normal")
-        self._btn_fried.configure(state="normal")
+        self._food_types.configure(state="normal")
         self._time_slider.set(10)
+        self._food_types.set('general')
         self._cooking_time.configure(text="Cooking time: 10.0min")
         self._client_bl.reset_parameters(self._time_slider)
 
@@ -285,19 +279,6 @@ class ClientGUI:
     def on_click_kosher(self):
         self._btn_kosher.configure(state="disabled")
         self._client_bl.add_preference_parameters("kosher")
-    def on_click_soup(self):
-        self._btn_soup.configure(state="disabled")
-        self._client_bl.add_food_type_parameters("soup")
-    def on_click_oven(self):
-        self._btn_oven.configure(state="disabled")
-        self._client_bl.add_food_type_parameters("oven")
-    def on_click_dessert(self):
-        self._btn_dessert.configure(state="disabled")
-        self._client_bl.add_food_type_parameters("dessert")
-    def on_click_fried(self):
-        self._btn_fried.configure(state="disabled")
-        self._client_bl.add_food_type_parameters("fried")
-
 
     def _change_slider_time(self,value):
         self._cooking_time.configure(text=f"Cooking time: {value}min")

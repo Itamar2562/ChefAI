@@ -81,8 +81,15 @@ class SignIn:
 
 
     def initiate_existing_ui(self):
+        def clear_entry(entry):
+            if len(entry.get()) != 0:
+                entry.delete(0, "end")
         self._login_massage.place_forget()
         self._signin_window.pack(fill="both", expand=True)
+        #remove any existing strings from the entries.
+        clear_entry(self._username_entry)
+        clear_entry(self._password_entry)
+        self._signin_window.focus() #make sure mouse focus isn't left on the entries
         if self._password_visible:
             self.toggle_password_visibility()
 
@@ -207,8 +214,16 @@ class Register:
         self.callback_initiate_signin_ui()
 
     def initiate_existing_ui(self):
+        def clear_entry(entry):
+            if len(entry.get()) != 0:
+                entry.delete(0, "end")
         self._login_massage.place_forget()
         self._register_window.pack(fill="both", expand=True)
+        #remove any existing strings in entry
+        clear_entry(self._password_entry)
+        clear_entry(self._username_entry)
+        clear_entry(self._confirm_password_entry)
+        self._register_window.focus() #make sure mouse focus isn't left on the entries
         if self._password_visible:
             self.toggle_password_visibility()
 

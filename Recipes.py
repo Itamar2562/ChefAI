@@ -1,8 +1,6 @@
 import itertools
 import time
 
-from PIL.ImageOps import expand
-
 from Protocol import *
 
 class Recipes:
@@ -19,11 +17,24 @@ class Recipes:
         self._btn_back=None
         self._threads=[]
         self._frames=[]
-        self._specific_recipe_frame=None
-        self._drag_start_x=0
-        self._drag_start_y=0
-        self._drag_scheduled=False
+
+        self._specific_frame=None
+        self._specific_frame_drag_start_x=0
+        self._specific_frame_drag_start_y=0
+        self._specific_frame_drag_scheduled=False
+
+        #badges
+        #🏆 High Protein
+        #
+        # 🏆 Balanced Meal
+        #
+        # 🏆 Veggie Rich
+        #
+        # 🏆 Comforting
+
         self._cook_image = CTkImage(Image.open(r"Images\cook_icon.png"), size=(100, 100))
+        self._nutrition_image = CTkImage(Image.open(r"Images\Nutrition_btn.png"), size=(100, 100))
+
 
     def create_ui(self):
         self._recipes_main_window=CTkFrame(self._container, )
@@ -47,7 +58,7 @@ class Recipes:
         self._btn_back.place( x=920,y=10)
 
     def on_click_back(self):
-        self.on_click_destroy_specific_recipe()
+        self.on_click_destroy_specific_frame()
         self._recipes_main_window.pack_forget()
         self._home_window.pack(fill="both", expand=True)
 
@@ -58,72 +69,107 @@ class Recipes:
         self._received_massage=True
         self.create_recipes_frame()
         while msg!="END":
-            msg=json.loads(msg)
-            for i in range(len(msg)):
-                self.add_recipe(msg[i])
-            bottom_spacer = CTkFrame(self._recipes_scrollable_window, height=50, fg_color="transparent")
-            bottom_spacer.pack(fill="x")
-            #break
-            msg=self._callback_receive_msg() #temp error
+            try:
+                msg=json.loads(msg)
+                for i in range(len(msg)):
+                    self.add_recipe(msg[i])
+                bottom_spacer = CTkFrame(self._recipes_scrollable_window, height=65, fg_color="transparent")
+                bottom_spacer.pack(fill="x")
+                #break
+                msg=self._callback_receive_msg() #temp error
+            except:
+                pass
 
     def add_recipe(self,data):
         #create the frame
         current_frame=CTkFrame(master=self._recipes_scrollable_window,width=200,height=100)
         headline=CTkLabel(master=current_frame,text=data['name'], font=('Calibri',20,"bold","underline"))
         description=CTkLabel(master=current_frame,text=data['description'],font=('Calibri',15),wraplength=500,justify="left",)
-        cook_btn=CTkButton(master=current_frame,image=self._cook_image,text="",hover=False,fg_color="transparent",command=lambda:self.on_click_cook(data))
-        cook_btn.place(x=500,y=0)
+        difficulty=CTkLabel(master=current_frame,text=data['difficulty'],font=('Calibri',25),text_color=DIFFICULTY_COLORS[data['difficulty']],anchor='center')
+        cook_btn=CTkButton(master=current_frame,text="Cook",fg_color="cyan",text_color="black",command=lambda:self.on_click_cook(data))
+        nutrition_btn=CTkButton(master=current_frame,text="Nutrition",fg_color="cyan",text_color="black", command=lambda :self.on_click_nutrition(data))
+        nutrition_btn.place(x=670,y=50)
+        cook_btn.place(x=520,y=50)
         headline.place(x=5,y=0)
         description.place(x=5,y=50)
+        difficulty.place(x=610,y=0)
         self._frames.append(current_frame)
         current_frame.pack(pady=10, padx=2, fill="x",)
 
     def on_click_cook(self,data):
-        if not self._specific_recipe_frame:
-            self._specific_recipe_frame = CTkFrame(master=self._recipes_main_window, width=750, height=450,border_width=3,border_color="blue")
-            self.bind_drag(self._specific_recipe_frame)
-            self._specific_recipe_frame.lift()
+        self.on_click_destroy_specific_frame()
+        self._specific_frame = CTkFrame(master=self._recipes_main_window, width=750,border_width=3,border_color="blue")
+        self.bind_drag_widget(self._specific_frame)
+        self._specific_frame.lift()
+        self._specific_frame_drag_start_x = 0
+        self._specific_frame_drag_start_y = 0
+        headline = CTkLabel(master=self._specific_frame, text=data['name'],font=('Calibri', 25, "bold", "underline"))
+        description = CTkLabel(master=self._specific_frame, text=data['description'], font=('Calibri', 20), justify="left", wraplength=550)
+        recipe_steps = CTkLabel(master=self._specific_frame, text=data['data'], justify="left",wraplength=750, font=('Calibri', 18))
+        for child in self._specific_frame.winfo_children():
+            self.bind_drag_widget(child)
+        #make sure the btn isn't bind
+        btn_back = CTkButton(self._specific_frame, text="Back", height=30, width=80, text_color="white",hover_color="#4185D0", font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_destroy_specific_frame)
+        btn_back.place(relx=1.0, x=-10, y=10, anchor="ne")
+        #recipe_steps.place(x=5, y=90)
+        #headline.place(x=5, y=5)
+        headline.pack(pady=20,padx=3)
+        description.pack(pady=10,padx=3)
+        recipe_steps.pack(pady=10,padx=3)
+        #description.place(x=5, y=35)
+        #btn_back.place(x=665, y=7)
+        self._specific_frame.place(x=125, y=50)
 
-        self._drag_start_x = 0
-        self._drag_start_y = 0
-        headline = CTkLabel(master=self._specific_recipe_frame, text=data['name'],font=('Calibri', 25, "bold", "underline"))
-        description = CTkLabel(master=self._specific_recipe_frame, text=data['description'], font=('Calibri', 20),anchor='w', justify="left", wraplength=650)
-        btn_back = CTkButton(self._specific_recipe_frame, text="Back", height=30, width=80, text_color="white",hover_color="#4185D0", font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_destroy_specific_recipe)
-        recipe_steps = CTkLabel(master=self._specific_recipe_frame, text=data['data'], anchor='w', justify="left",wraplength=700, font=('Calibri', 18))
-        for child in self._specific_recipe_frame.winfo_children():
-            self.bind_drag(child)
-        recipe_steps.place(x=5, y=90)
-        headline.place(x=5, y=5)
-        description.place(x=5, y=35)
-        btn_back.place(x=670, y=5)
-        self._specific_recipe_frame.place(x=150, y=50)
+    def on_click_nutrition(self,data):
+        self.on_click_destroy_specific_frame()
+        self._specific_frame = CTkFrame(master=self._recipes_main_window, width=750,border_width=3, border_color="blue")
+        self.bind_drag_widget(self._specific_frame)
+        self._specific_frame.lift()
+        self._specific_frame_drag_start_x = 0
+        self._specific_frame_drag_start_y = 0
+        headline = CTkLabel(master=self._specific_frame, text=data['name'],font=('Calibri', 25, "bold", "underline"))
+        description = CTkLabel(master=self._specific_frame, text=data['description'], font=('Calibri', 20),anchor='w', justify="left", wraplength=650)
+        nutrition = CTkLabel(master=self._specific_frame, text=data['nutrition'], anchor='w', justify="left", wraplength=730, font=('Calibri', 18))
+        for child in self._specific_frame.winfo_children():
+            self.bind_drag_widget(child)
+        #make sure the btn isn't bind
+        btn_back = CTkButton(self._specific_frame, text="Back", height=30, width=80, text_color="white",hover_color="#4185D0", font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_destroy_specific_frame)
+        headline.pack(pady=20, padx=3)
+        description.pack(pady=10, padx=3)
+        btn_back.place(relx=1.0, x=-10, y=10, anchor="ne")
+        nutrition.pack(pady=10,padx=3,side="left")
+        self._specific_frame.place(x=125, y=50)
 
-    def bind_drag(self,widget):
-        widget.bind("<ButtonPress-1>", self.start_move,add="+")
-        widget.bind("<B1-Motion>", self.on_move,add="+")
 
-    def start_move(self, event):
-        self._drag_start_x = event.x
-        self._drag_start_y = event.y
-        self._drag_scheduled = False
+    def bind_drag_widget(self,widget):
+        widget.bind("<ButtonPress-1>", self.specific_frame_start_move,add="+")
+        widget.bind("<B1-Motion>", self.on_specific_frame_move,add="+")
 
-    def on_move(self, event):
-        x = self._specific_recipe_frame.winfo_x() + event.x - self._drag_start_x
-        y = self._specific_recipe_frame.winfo_y() + event.y - self._drag_start_y
 
-        # schedule placement every 10ms (throttling)
-        if not self._drag_scheduled:
-            self._drag_scheduled = True
-            self._specific_recipe_frame.after(3, self._do_drag, x, y)
+    def specific_frame_start_move(self, event):
+        self._specific_frame_drag_start_x = event.x
+        self._specific_frame_drag_start_y= event.y
+        self._specific_frame_drag_scheduled = False
+        self._specific_frame.lift()
 
-    def _do_drag(self, x, y):
-        self._specific_recipe_frame.place(x=x, y=y)
-        self._drag_scheduled = False
+    #change this
+    def on_specific_frame_move(self, event):
+        def _do_drag(dx, dy):
+            self._specific_frame.place(x=dx, y=dy)
+            self._specific_frame_drag_scheduled = False
+        x = self._specific_frame.winfo_x() + event.x - self._specific_frame_drag_start_x
+        y = self._specific_frame.winfo_y() + event.y - self._specific_frame_drag_start_y
+        # schedule placement every 2-3ms (throttling)
+        if not self._specific_frame_drag_scheduled:
+            self._specific_frame_drag_scheduled = True
+            self._specific_frame.after(4,_do_drag, x, y)
 
-    def on_click_destroy_specific_recipe(self):
-        if self._specific_recipe_frame:
-            self._specific_recipe_frame.after(0,self._specific_recipe_frame.destroy)
-            self._specific_recipe_frame=None
+
+    def on_click_destroy_specific_frame(self):
+        if self._specific_frame:
+            self._specific_frame.after(0,self._specific_frame.destroy)
+            self._specific_frame=None
+
 
     def animate(self,temp_frame):
         temp_frame.pack(fill="both", expand=True)

@@ -7,6 +7,7 @@ class Ingredients:
         self.home_window=home_window
         self.callback_add_btn=add_btn
         self.is_currently_editing=False
+        self.new_ingredient=False
         self.ingredients_frame=ingredients_frame
         self.client_status=client_status
         self.callback_send_data=callback_send_data
@@ -16,6 +17,7 @@ class Ingredients:
     def add_ingredient(self):
         self.callback_add_btn("disabled")
         self.is_currently_editing=True
+        self.new_ingredient=True
         self.previous_ingredient=""
         #create the frame
         current_frame=CTkFrame(master=self.ingredients_frame,width=80,height=40)
@@ -33,6 +35,7 @@ class Ingredients:
 
     def initiate_first_ingredients(self,ingredient):
         # create the frame
+        self.ingredients_frame._parent_canvas.yview_moveto(0.0)
         self.is_currently_editing=False
         self.callback_add_btn("normal")
         current_frame = CTkFrame(master=self.ingredients_frame, width=80, height=40)
@@ -71,6 +74,7 @@ class Ingredients:
         current_btn.configure(text="✎️", text_color="white", )
         self.callback_add_btn("normal")
         self.is_currently_editing = False
+        self.new_ingredient=False
 
     def edit_mode(self,current_entry,current_btn):
         current_entry.configure(state="normal")
@@ -94,10 +98,10 @@ class Ingredients:
         self.is_currently_editing = False
 
     def on_click_delete_btn(self,current_frame,current_entry):
-        #dont let users delete other ing when editing another one
+        #dont let users delete other ingredients when editing another one or delete on edit mode
         current_state=current_entry.cget("state")
-        #dont let user delete other ing when editing
-        if self.is_currently_editing:
+        #dont let user delete other ing when editing or
+        if (self.is_currently_editing and current_state=="disabled")or( not self.new_ingredient and current_state=="normal"):
             return
         data=current_entry.get()
         if data !="":
