@@ -1,3 +1,5 @@
+import time
+
 from ClientBL import *
 from WidgetUtils import Ingredients
 from Login import SignIn
@@ -46,6 +48,8 @@ class ClientGUI:
         self._btn_sign_out=None
         self._time_slider=None
         self._btn_make=None
+        self._card=None
+        self._image_for_card_area=None
         self._btn_add=None
         self._btn_clear=None
         self._cooking_time=None
@@ -84,8 +88,11 @@ class ClientGUI:
         self._ChefAI = CTkLabel(master=self._home, text="ChefAI", font=('Calibri', 50,"bold","underline"))
         self._ChefAI.place(x=410, y=0)
 
-        self._btn_make=CTkButton(master=self._home, text="Make!", font=("Calibri",30), fg_color="#FF991C", hover_color="#DB8318",height=60,width=150, command=self.on_click_make)
-        self._btn_make.place(x=675,y=425)
+        self._card = CTkFrame(self._home,width=360,height=320,corner_radius=24,fg_color="#1E1E2E",border_width=2, border_color="#3A3F8F")
+        self._image_for_card_area=CTkLabel(master=self._card,text="✨",font=("", 100))
+        self._image_for_card_area.place(x=160,y=80,anchor='center')
+        self._btn_make =CTkButton(self._card, text="MAKE!",font=("Segoe UI", 18, "bold"), width=300, height=80,corner_radius=28,fg_color="#5B5FD9",hover_color="#6F74FF",text_color="#E6E8FF", command=self.on_click_make)
+        self._btn_make.place(x=180,y=225,anchor='center')
         #Max Time scale
 
         self._time_slider = CTkSlider(master=self._home,from_=10,to=120,orientation="horizontal",width=300,number_of_steps=22,command=self._change_slider_time)
@@ -149,10 +156,12 @@ class ClientGUI:
         self.forget_widget(self._level)
         self.forget_widget(self._btn_sign_out)
         self.forget_widget(self._btn_clear)
+        self.forget_widget(self._card)
         self.on_click_reset()
         if self._ingredients:
-            self._ingredients.clear_ingredients()
-            self.forget_widget(self._ingredients)
+            self._ingredients.remove()
+            self._ingredients=None
+            #self.forget_widget(self._ingredients)
         self.update_greeting()
         self._username=""
         self._btn_login.place(x=915, y=10)
@@ -220,22 +229,21 @@ class ClientGUI:
             return bool(msg)
         def update_add_btn(state):
             self._btn_add.configure(state=state)
-        if not self._ingredients:
-            self._ingredients = Ingredients(self._home, self._client_status,send_ingredient, receive_confirmation,update_add_btn,width=300,height=300)
-            write_to_log("hot here 2")
-        ingredient_list = self._client_bl.receive_msg()
-        ingredient_list = json.loads(ingredient_list)
-        for i in ingredient_list:
-            self._ingredients.initiate_first_ingredients(i)
+        self._btn_add.configure(state='disabled')
+        self._btn_clear.configure(state='disabled')
+        self._ingredients = Ingredients(self._home, self._client_status,send_ingredient, receive_confirmation,update_add_btn,width=270,height=300,fg_color="#1E1E2E",border_width=2,border_color="#3A3F8F")
+        t=threading.Thread(target=self.initiate_first_ingredients,daemon=True)
+        t.start()
         self.update_greeting()
         self.forget_widget(self._btn_login)
         self._btn_sign_out.place(x=915, y=10)
         self._btn_add.place(x=10,y=60)
-        self._ingredients.place(x=0,y=100)
+        self._ingredients.place(x=5,y=100)
         level_msg = self._client_bl.receive_msg()
         self._level.configure(text=Levels[level_msg])
         self._level.place(x=5,y=25)
         self._btn_clear.place(x=100,y=60)
+        self._card.place(x=305,y=80)
         self.on_click_reset()
 
     def on_click_delete_all_btn(self):
@@ -245,6 +253,17 @@ class ClientGUI:
             self._ingredients.clear_ingredients()
             self._btn_add.configure(state="normal")
 
+    def initiate_first_ingredients(self):
+        ingredient_list = self._client_bl.receive_msg()
+        ingredient_list = json.loads(ingredient_list)
+        for i in ingredient_list:
+            try:
+                self._ingredients.initiate_first_ingredients(i)
+                time.sleep(0.05)
+            except: #if user decided to exit while adding
+                return
+        self._btn_add.configure(state="normal")
+        self._btn_clear.configure(state="normal")
 
     #do a function of update_greeting instead (it will update auto not return str)
     def update_greeting(self):

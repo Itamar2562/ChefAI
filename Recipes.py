@@ -16,7 +16,6 @@ class Recipes:
         self._headline=None
         self._btn_back=None
         self._threads=[]
-        self._frames=[]
 
         self._specific_frame=None
         self._specific_frame_drag_start_x=0
@@ -96,7 +95,7 @@ class Recipes:
         current_frame=CTkFrame(master=self._recipes_scrollable_window,width=200,height=100,border_width=3,border_color="blue",corner_radius=15)
         headline=CTkLabel(master=current_frame,text=data['name'], font=('Calibri',20,"bold","underline"),wraplength=500)
         description=CTkLabel(master=current_frame,text=data['description'],font=('Calibri',15),wraplength=500,justify="left",)
-        difficulty_and_time=CTkLabel(master=current_frame,text=f'{data['difficulty']} • {data['time']} min',font=('Calibri',25))
+        difficulty_and_time=CTkLabel(master=current_frame,text=f"{data['difficulty']} • {data['time']} min",font=('Calibri',25))
         cook_btn=CTkButton(master=current_frame,text="Cook",fg_color="cyan",text_color="black",command=lambda:self.on_click_cook(data))
         nutrition_btn=CTkButton(master=current_frame,text="Nutrition",fg_color="cyan",text_color="black", command=lambda :self.on_click_nutrition(data))
         nutrition_btn.place(x=670,y=50)
@@ -104,7 +103,6 @@ class Recipes:
         headline.place(x=5,y=5)
         description.place(x=5,y=55)
         difficulty_and_time.place(x=580,y=15)
-        self._frames.append(current_frame)
         current_frame.pack(pady=10, padx=2, fill="x",)
 
     def on_click_cook(self,data):
