@@ -94,8 +94,8 @@ class SignIn:
             self.toggle_password_visibility()
 
     #add a forget function instead
-    def get_signin_window(self):
-        return  self._signin_window
+    def forget_window(self):
+        return  self._signin_window.pack_forget()
 
     def get_register(self):
         return self._register
@@ -112,28 +112,30 @@ class SignIn:
             self._password_visible = True
             
     def on_click_signin(self):
-        self._username = self._username_entry.get()
+        self._username = self._username_entry.get().strip()
         self._password = self._password_entry.get()
-        success = self.print_login_error_msg()
+        success = self.check_sign_in()
         if success:
             data = {
                 "name": self._username,
                 "password": self._password
             }
             self.callback_client_signin(data)
-    def print_login_error_msg(self):
+    def check_sign_in(self):
         if not self._client_statue.connected:
-            self._login_massage.configure(text="Please first connect to the server", text_color="red")
-            self._login_massage.place(x=410, y=300)
+            self.show_massage("Please first connect to the server")
             return False
-            # make sure password and username are ok
+        #because these are the username and password rules I should return false instead of waiting for server response
+        elif self._username == "" or self._password == "" or " " in self._password or len(self._username) > 32:
+            self.show_massage("User doesn't exists")
+            return False
         else:
-            # for future remove the success here (it should only show success if it saved it to db not if no errors)
             return True
-    #this function prints massages *after sending to db*
-    def print_database_msg(self,msg):
-        self._login_massage.configure(text=msg)
-        self._login_massage.place(x=440, y=300)
+
+    def show_massage(self,msg):
+        self._login_massage.configure(text=msg, text_color="red")
+        self._login_massage.place(x=500,y=310,anchor='center')
+
     def get_username(self):
         return self._username
 
@@ -156,12 +158,13 @@ class Register:
         self._username_text=None
         self._password_text=None
         self._confirm_password_text=None
-        self._btn_login=None
+        self._btn_register=None
         self._login_massage=None
         self._btn_password_visible=None
         self._open_eye_image=None
         self._close_eye_image = None
         self._password_visible=False
+        self._default_items_checkbox=None
         self._btn_signin=None
         self.callback_client_register=callback_client_register
         self.callback_initiate_signin_ui=callback_signin_ui
@@ -195,10 +198,17 @@ class Register:
         self._confirm_password_entry = CTkEntry(self._register_window, show="♀", placeholder_text="confirm password")
         self._confirm_password_entry.place(x=430,y=270)
 
-        self._btn_login=CTkButton(self._register_window,text="Register",font=("Calibri",15),command=self.on_click_register,height=30, width=150)
-        self._btn_login.place(x=425,y=310)
+        self._btn_register=CTkButton(self._register_window,text="Register",font=("Calibri",15),command=self.on_click_register,height=30, width=150)
+        self._btn_register.place(x=425,y=310)
+        self._default_items_checkbox = CTkCheckBox(master=self._register_window, text="Add default items",font=("Calibri", 17))
+        self._default_items_checkbox.place(x=585, y=315)
+        self._default_items_checkbox.select()
+
         self._btn_back=CTkButton(self._register_window,text="Back",height=30, width=80,text_color="white",hover_color="#4185D0",font=("Calibri",17),fg_color="#C850C0",command=self.on_click_back)
         self._btn_back.place(x=915, y=10)
+
+
+
 
         self._btn_signin=CTkButton(self._register_window,text="Sign in",height=30,width=80,text_color="white",hover_color="#4185D0",
                                      font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_signin)
@@ -223,16 +233,17 @@ class Register:
         clear_entry(self._password_entry)
         clear_entry(self._username_entry)
         clear_entry(self._confirm_password_entry)
+        self._default_items_checkbox.select()
         self._register_window.focus() #make sure mouse focus isn't left on the entries
         if self._password_visible:
             self.toggle_password_visibility()
 
 
     def on_click_register(self):
-        self._username=self._username_entry.get()
+        self._username=self._username_entry.get().strip()
         self._password=self._password_entry.get()
         self._confirm_password=self._confirm_password_entry.get()
-        success=self.print_login_error_msg()
+        success=self.check_register()
         if success:
             data={
                 "name":self._username,
@@ -254,37 +265,31 @@ class Register:
             self._btn_password_visible.configure(image=self._open_eye_image)
             self._password_visible=True
 
-    def print_login_error_msg(self)->bool:
+    def check_register(self)->bool:
         if not self._login_massage:
             self._login_massage = CTkLabel(master=self._register_window, text_color="red")
         if not self._client_statue.connected:
-            self._login_massage.configure(text="Please first connect to the server",text_color="red")
-            self._login_massage.place(x=410, y=345)
+            self.print_massage("Please first connect to the server")
             return False
         elif self._confirm_password!=self._password:
-            self._login_massage.configure(text="Password Dont match!",text_color="red")
-            self._login_massage.place(x=435,y=345)
+            self.print_massage("Passwords Dont match!")
+            return False
         #make sure password and username are ok
         elif self._username == "" or self._password == "" or " " in self._password or len(self._username)>32:
-            self._login_massage.configure(text=(
-        "Enter a valid username and password:\n"
-        "          • Whitespaces are not allowed in password\n"
-        "      • Username must be below 32 characters"),text_color="red")
-            self._login_massage.place(x=360, y=350)
+            self.print_massage("Enter a valid username and password:\n"
+        "•Whitespaces are not allowed in password\n"
+        "•Username must be below 32 characters")
             return False
         else:
             #for future remove the success here (it should only show success if it saved it to db not if no errors)
             return True
 
-        # this function prints massages *after sending to db*
-    def print_database_msg(self, msg):
-        self._login_massage.configure(text=msg)
+    def print_massage(self,msg):
         if msg == "saved to database":
-            self._login_massage.configure(text_color="green")
-            self._login_massage.place(x=445, y=345)
+            self._login_massage.configure(text="Success! Your account has been created.", text_color="green")
         else:
-            self._login_massage.configure(text_color="red")
-            self._login_massage.place(x=430, y=345)
+            self._login_massage.configure(text=msg, text_color="red")
+        self._login_massage.place(x=500, y=370,anchor='center')
 
     def get_username(self):
         return self._username

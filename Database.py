@@ -37,7 +37,7 @@ def create_response_msg_db(cmd: str,data :str) ->str:
             if result==1:
                 response = "connected"
             else:
-                response="user doesn't exists"
+                response="User doesn't exists"
         elif cmd=="REG":
             # Insert data record
             curser.execute('''

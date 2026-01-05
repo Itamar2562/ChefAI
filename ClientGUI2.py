@@ -1,5 +1,5 @@
 from ClientBL import *
-from Ingredients import Ingredients
+from WidgetUtils import Ingredients
 from Login import SignIn
 from Recipes import Recipes
 
@@ -50,10 +50,10 @@ class ClientGUI:
         self._btn_clear=None
         self._cooking_time=None
         self._username=""
-        self._login = None
+        self._sign_in = None
 
 
-        self.ingredients=None
+        self._ingredients=None
 
         self._register=None
         self._recipes=None
@@ -61,8 +61,6 @@ class ClientGUI:
         self._connection.start()
 
         self._client_status = ClientStatue()
-
-        self._ingredients_frame=None
 
         self.create_ui()
 
@@ -115,8 +113,6 @@ class ClientGUI:
         self._btn_add=CTkButton(master=self._home,text="Add",font=("Calibri",17), fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_add)
         self._btn_clear = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#C850C0",hover_color="#4185D0", font=("Arial",17),command=self.on_click_delete_all_btn)
 
-        self._ingredients_frame=CTkScrollableFrame(master=self._home, width=300, height=300)
-
         self._level=CTkLabel(master=self._home, font=("Calibri",25))
 
         self._btn_login = CTkButton(master=self._home, text="Login", font=("Calibri",17), fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_login)
@@ -130,43 +126,45 @@ class ClientGUI:
         #the weird prob that it doesn't get removed is because home is still none so gotta remove the first build
         connected_text= CTkLabel(master=self._root, text="Not connected", font=('Calibri', 22),fg_color="#333333")
         connected_text.place(x=5,y=500)
+        was_connected=False
         while True:
             if not self._client_status.connected:
                 connected_text.configure(text="Not connected",text_color="red")
-                self.initiate_disconnected_home() # very bado
+                if was_connected: #In order to make sure Im only initiating disconnected home if I was connected before instead of everytime.
+                    self.initiate_disconnected_home()
+                    write_to_log("got hee")
+                    was_connected=False
                 self._client_status.connected=self._client_bl.connect()
             else:
                 connected_text.configure(text="connected",text_color="green")
+                was_connected=True
                 self._client_status.connected=self._client_bl.check_connection()
 
     def on_click_add(self):
-        self.ingredients.add_ingredient()
-        canvas = self._ingredients_frame._parent_canvas
-        canvas.update_idletasks()
-        canvas.configure(scrollregion=canvas.bbox("all"))
-        self._ingredients_frame._parent_canvas.yview_moveto(1.0)
+        self._ingredients.add_ingredient()
+        self._ingredients.move_down()
 
     def initiate_disconnected_home(self):
         self.forget_widget(self._btn_add)
-        self.forget_widget(self._ingredients_frame)
         self.forget_widget(self._level)
         self.forget_widget(self._btn_sign_out)
         self.forget_widget(self._btn_clear)
         self.on_click_reset()
-        if self.ingredients:
-            self.ingredients.clear_ingredients()
+        if self._ingredients:
+            self._ingredients.clear_ingredients()
+            self.forget_widget(self._ingredients)
         self.update_greeting()
         self._username=""
         self._btn_login.place(x=915, y=10)
 
     def forget_widget(self,widget):
-        if widget and widget.winfo_ismapped():
+        if widget:
             widget.place_forget()
 
     def on_click_make(self):
         #only send data if client is connected maybe simply make btn disabled for furture
         self._client_bl.add_food_type_parameters(self._food_types.get())
-        if not self._client_status.connected or not  self._client_status.signed_in or self.ingredients.is_editing():
+        if not self._client_status.connected or not  self._client_status.signed_in or self._ingredients.is_editing():
             return
         cmd="MAKE"
         args=self._client_bl.get_parameters(self._time_slider.get())
@@ -180,19 +178,19 @@ class ClientGUI:
             cmd="SIGNIN"
             self._client_bl.send_data(cmd,data)
             msg=self._client_bl.receive_msg()
-            self._login.print_database_msg(msg)
+            self._sign_in.show_massage(msg)
             if msg == "connected":
                 self._client_status.signed_in=True
-                self._username=self._login.get_username()
-                self._login.get_signin_window().pack_forget()
+                self._username=self._sign_in.get_username()
+                self._sign_in.forget_window()
                 self._home.pack(fill="both", expand=True)
                 self.initiate_signed_in()
         def on_click_register(data):
-            self._register = self._login.get_register()
+            self._register = self._sign_in.get_register()
             cmd="REG"
             self._client_bl.send_data(cmd,data)
             msg = self._client_bl.receive_msg()
-            self._register.print_database_msg(msg)
+            self._register.print_massage(msg)
             #maybe create another thread that process receiving data
             #it gets data and cmd from server
             #now I just check it manually
@@ -200,11 +198,11 @@ class ClientGUI:
             #also create different functions for switching frames and send them so there is a clean switching IMPORTANT (kinda did it having a problem with cleaning entry)
         self._home.pack_forget()
         #create only one login class that will hold user username and password for later use.
-        if not self._login:
-            self._login=SignIn(self._container,self._home,self._client_status,on_click_sign_in,on_click_register)
-            self._login.create_ui()
+        if not self._sign_in:
+            self._sign_in=SignIn(self._container,self._home,self._client_status,on_click_sign_in,on_click_register)
+            self._sign_in.create_ui()
         else:
-            self._login.initiate_existing_ui()
+            self._sign_in.initiate_existing_ui()
 
     def on_click_sign_out(self):
         self._client_status.signed_in=False
@@ -222,17 +220,18 @@ class ClientGUI:
             return bool(msg)
         def update_add_btn(state):
             self._btn_add.configure(state=state)
-        if not self.ingredients:
-            self.ingredients = Ingredients(self._home, update_add_btn, self._ingredients_frame, self._client_status,send_ingredient, receive_confirmation)
+        if not self._ingredients:
+            self._ingredients = Ingredients(self._home, self._client_status,send_ingredient, receive_confirmation,update_add_btn,width=300,height=300)
+            write_to_log("hot here 2")
         ingredient_list = self._client_bl.receive_msg()
         ingredient_list = json.loads(ingredient_list)
         for i in ingredient_list:
-            self.ingredients.initiate_first_ingredients(i)
+            self._ingredients.initiate_first_ingredients(i)
         self.update_greeting()
         self.forget_widget(self._btn_login)
         self._btn_sign_out.place(x=915, y=10)
         self._btn_add.place(x=10,y=60)
-        self._ingredients_frame.place(x=0,y=100)
+        self._ingredients.place(x=0,y=100)
         level_msg = self._client_bl.receive_msg()
         self._level.configure(text=Levels[level_msg])
         self._level.place(x=5,y=25)
@@ -243,7 +242,7 @@ class ClientGUI:
         self._client_bl.send_data("DELETE_ALL","")
         succeed=bool(self._client_bl.receive_msg())
         if succeed:
-            self.ingredients.clear_ingredients()
+            self._ingredients.clear_ingredients()
             self._btn_add.configure(state="normal")
 
 

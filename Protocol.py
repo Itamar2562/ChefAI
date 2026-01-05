@@ -25,9 +25,6 @@ Levels={
     '3':"Expert"
 }
 
-DIFFICULTY_COLORS={'easy':'green','medium':'orange','hard':'red'}
-
-
 # prepare Log file
 LOG_FILE = 'LOG.log'
 logging.basicConfig(filename=LOG_FILE,level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
