@@ -2,9 +2,10 @@ from Protocol import *
 
 # class for signin will add switching frame inside register, home button and backtoreg btn
 class SignIn:
-    def __init__(self, container, home, client_statue, callback_signin , callback_register):
+    def __init__(self, container, home,disconnected_home, client_statue, callback_signin , callback_register):
         self._container = container
         self._home_window = home
+        self._disconnected_home=disconnected_home
         self._client_statue = client_statue
         self._username = None
         self._password = None
@@ -36,7 +37,7 @@ class SignIn:
         self._close_eye_image = CTkImage(Image.open(r"Images\close_eye.png"), size=(20, 20))
 
         self._login_text = CTkLabel(master=self._signin_window, text="Sign in", font=('Calibri', 50,"bold","underline"))
-        self._login_text.place(x=435, y=50)
+        self._login_text.place(x=430, y=50)
 
         self._username_entry = CTkEntry(self._signin_window, placeholder_text="enter username")
         self._username_entry.place(x=430, y=150)
@@ -68,7 +69,7 @@ class SignIn:
     #get back home from sign in screen
     def on_click_back(self):
         self._signin_window.pack_forget()
-        self._home_window.pack(fill="both", expand=True)
+        self._disconnected_home.pack(fill="both", expand=True)
 
     #get to register from sign in screen
     def on_click_register(self):
@@ -76,7 +77,7 @@ class SignIn:
         if self._register is not None:
             self._register.initiate_existing_ui()
         else:
-            self._register = Register(self._container, self._home_window, self._client_statue,self.callback_client_register, self.initiate_existing_ui)
+            self._register = Register(self._container, self._disconnected_home, self._client_statue,self.callback_client_register, self.initiate_existing_ui)
             self._register.create_ui()
 
 
@@ -142,9 +143,9 @@ class SignIn:
 
 
 class Register:
-    def __init__(self,container,home,client_statue,callback_client_register,callback_signin_ui):
+    def __init__(self,container,disconnected_home,client_statue,callback_client_register,callback_signin_ui):
         self._container=container
-        self._home_window=home
+        self._disconnected_home_window=disconnected_home
         self._client_statue=client_statue
         self._username=None
         self._password=None
@@ -216,7 +217,7 @@ class Register:
     #go back to home from Register
     def on_click_back(self):
         self._register_window.pack_forget()
-        self._home_window.pack(fill="both", expand=True)
+        self._disconnected_home_window.pack(fill="both", expand=True)
 
     #go back to sign in from register
     def on_click_signin(self):

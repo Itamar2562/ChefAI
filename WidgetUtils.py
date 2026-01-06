@@ -1,3 +1,5 @@
+import time
+
 from Protocol import *
 
 class Ingredients(CTkScrollableFrame):
@@ -13,6 +15,8 @@ class Ingredients(CTkScrollableFrame):
         self.callback_receive_confirmation=callback_receive_confirmation
         self.previous_ingredient=""
 
+        self._placeholder_for_scrollbar=None#adding a frame resets the scrollbar
+
     def move_down(self):
         self._parent_canvas.update_idletasks()
         self._parent_canvas.configure(scrollregion=self._parent_canvas.bbox("all"))
@@ -23,6 +27,9 @@ class Ingredients(CTkScrollableFrame):
             self.destroy()
 
     def add_ingredient(self):
+        if self._placeholder_for_scrollbar:
+            self._placeholder_for_scrollbar.destroy()
+            self._placeholder_for_scrollbar=None
         self.callback_add_btn("disabled")
         self.is_currently_editing=True
         self.new_ingredient=True
@@ -40,6 +47,9 @@ class Ingredients(CTkScrollableFrame):
         current_entry.bind('<Return>',lambda event: self.on_click_main_btn(current_entry,current_main_btn))
 
     def initiate_first_ingredients(self,ingredient):
+        if self._placeholder_for_scrollbar:
+            self._placeholder_for_scrollbar.destroy()
+            self._placeholder_for_scrollbar=None
         # create the frame
         current_frame=CTkFrame(master=self,width=80,height=40,corner_radius=28,fg_color="#5B5FD9")
         current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
@@ -95,12 +105,15 @@ class Ingredients(CTkScrollableFrame):
         current_entry.bind('<Return>',lambda event: self.on_click_main_btn(current_entry,current_btn))
 
     def clear_ingredients(self):
-        for f in self.winfo_children():
-            f.destroy()
-        self.is_currently_editing=False
+        self.is_currently_editing = False
         self._parent_canvas.yview_moveto(0.0)
         self._parent_canvas.update_idletasks()
         self._parent_canvas.configure(scrollregion=self._parent_canvas.bbox("all"))
+        for f in self.winfo_children():
+                f.destroy()
+        self._placeholder_for_scrollbar=CTkFrame(master=self,width=20,height=20,fg_color="transparent")
+        self._placeholder_for_scrollbar.pack()
+
 
     def destroy_frame(self,current_frame):
         current_frame.destroy()
