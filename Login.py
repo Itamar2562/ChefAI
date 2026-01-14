@@ -244,11 +244,13 @@ class Register:
         self._username=self._username_entry.get().strip()
         self._password=self._password_entry.get()
         self._confirm_password=self._confirm_password_entry.get()
+        default_list_items=self._default_items_checkbox.get()
         success=self.check_register()
         if success:
             data={
                 "name":self._username,
-                "password":self._password
+                "password":self._password,
+                "default":default_list_items
             }
             self.callback_client_register(data)
             #going back to sign in immediate

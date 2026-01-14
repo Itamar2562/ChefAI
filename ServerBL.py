@@ -1,6 +1,3 @@
-from http.client import responses
-from logging import exception
-
 from Protocol import *
 from Database import *
 from Server_AI import *
@@ -78,13 +75,16 @@ class ClientHandler(threading.Thread):
                cmd,data=self.receive_msg()
                write_to_log(f"cmd:{cmd}!")
                write_to_log(f"msg:{data}!")
-               if check_cmd(cmd)==1:
+               cmd_type=check_cmd(cmd)
+               if cmd_type==1:
                    self.handle_make(data)
-               elif check_cmd(cmd)==2:
+               elif cmd_type==2:
                    self.handle_db_login_msg(cmd,data)
-               elif check_cmd(cmd)==3:
+               elif cmd_type==3:
                    write_to_log("got here2")
                    self.handle_ingredients(cmd,data)
+               elif cmd_type==4:
+                   self.handle_list(cmd,data)
             except:
                 if not self.check_conn():
                     self.callback_update_client_handler(self) #send the thread to be removed
@@ -115,30 +115,45 @@ class ClientHandler(threading.Thread):
             response=self.remove_all_ingredients_from_db()
             self.send_data("DELETE_ALL",response)
 
-    #data will look like this [10.0, 3, "fried", "oven", "soup", 3, "halal", "vegan", "kosher"]
+    #data will look like this [10.0, 3, "fried", "oven", "soup", 3, "halal", "vegan", "kosher"] False this is goofy version
     #to separate the data I will get length and skip time with it
     #then I will run the loop for the amount+skipped parts e.g. 2+3=5 -> 2:5 will get 3 ingredients
-    def handle_make(self,data):
-        data=json.loads(data)
-        write_to_log(data['time'])
-        write_to_log(data['type'])
-        write_to_log(data['preference'])
-        ingredients=get_ingredients_list(self._current_id)
+    def handle_make(self,parameters):
+        parameters=json.loads(parameters)
+        write_to_log(parameters['time'])
+        write_to_log(parameters['type'])
+        write_to_log(parameters['preference'])
+        data=get_lists_with_ingredients(self._current_id)
+        ingredients=self.extract_all_ingredients(data)
         ingredients=json.dumps(ingredients)
         #in client receive create a receive loop getting it one by one
-        if len(data['type'])==0:
-            ai_response=send_and_receive_ai_request(data['time'],"general",data['preference'], ingredients)
+        if len(parameters['type'])==0:
+            ai_response=send_and_receive_ai_request(parameters['time'],"general",parameters['preference'], ingredients)
             write_to_log(ai_response)
             self.send_data("AI",ai_response)
         else:
-            ai_response=send_and_receive_ai_request(data['time'],data['type'],data['preference'], ingredients)
+            ai_response=send_and_receive_ai_request(parameters['time'],parameters['type'],parameters['preference'], ingredients)
             write_to_log(ai_response)
             self.send_data("AI",ai_response)
         self.send_data("AI","END")
 
+    def extract_all_ingredients(self,data):
+        write_to_log(data)
+        ingredients=[]
+        for key in data.keys():
+            for ing in data[key]:
+                ingredients.append(ing)
+        write_to_log(ingredients)
+        return ingredients
 
-
-
+    def handle_list(self,cmd,data):
+        write_to_log("got here maybe")
+        if cmd == "LIST":
+            response = self.add_list_to_db(data)
+            self.send_data("ADD", response)
+        if cmd=="DELETE_LIST":
+            response=self.remove_list_from_db(data)
+            self.send_data("DELETE_LIST",response)
 
 
     def handle_first_handshake(self):
@@ -172,31 +187,51 @@ class ClientHandler(threading.Thread):
             return False
 
     def add_ingredient_to_db(self,ingredient):
-        succeed = add_ingredient_to_db_by_id(self._current_id,ingredient)
+        try:
+            ingredient=json.loads(ingredient)
+            succeed = handle_ingredient_update(self._current_id,ingredient)
+            if succeed:
+                return "True"
+            return "False"
+        except Exception as e:
+            write_to_log(e)
+
+    def add_list_to_db(self,ing_list):
+        ing_list=json.loads(ing_list)
+        succeed = handle_db_list_update(self._current_id,ing_list )
         if succeed:
             return "True"
         return "False"
 
-    def remove_ingredient_from_db(self,ingredient):
-        succeed=remove_ingredient(self._current_id,ingredient)
-        if succeed:
-            return "True"
-        return "False"
+    def remove_ingredient_from_db(self,data):
+        try:
+            data=json.loads(data)
+            write_to_log(data[0])
+            write_to_log(data[1])
+            succeed=delete_ingredient(self._current_id,data[0],data[1])
+            if succeed:
+                return "True"
+            return "False"
+        except Exception as e:
+            write_to_log(e)
 
     def remove_all_ingredients_from_db(self):
-        write_to_log("got here")
         succeed=remove_all_ingredients(self._current_id)
         if succeed:
             return "True"
         return "False"
+    def remove_list_from_db(self,new_list):
+        succeed=delete_list(self._current_id,new_list)
+        if succeed:
+            return"True"
+        return "False"
 
-    def initiate_sign_in(self,data):
-        self._current_id = get_id(data)
-        ingredients_list=get_ingredients_list(self._current_id)
-        self.send_data("Ingredients",ingredients_list)
 
-        level=self.get_level()
-        self.send_data("LEVEL",level)
+    def initiate_sign_in(self,login_data):
+        self._current_id = get_id(login_data)
+        data=get_lists_with_ingredients(self._current_id)
+        write_to_log(data)
+        self.send_data("Ingredients",data)
 
     def send_data(self,cmd,args,verbose=True):
         try:
@@ -223,10 +258,8 @@ class ClientHandler(threading.Thread):
             cmd=self.decrypt(cmd).decode()
         return cmd, msg
 
-    def get_level(self):
-        user_id=self._current_id
-        level=get_level_by_id(user_id)
-        return level
+
+
 
 
 

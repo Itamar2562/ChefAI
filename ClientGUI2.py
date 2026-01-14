@@ -1,6 +1,5 @@
-import time
 from ClientBL import *
-from WidgetUtils import Ingredients
+from WidgetUtils import Ingredient, DraggableFrame
 from Login import SignIn
 from Recipes import Recipes
 from Refrigerator import Refrigerator
@@ -11,11 +10,6 @@ BTN_Make_IMAGE="./Images/GUI - button_make.png"
 FONT="Calibri"
 FONT_BUTTON=(FONT,16)
 SMALL_FONT_BUTTON=(FONT,12)
-
-class ClientStatue:
-    def __init__(self):
-        self.connected=False
-        self.signed_in=False
 
 #automatic logout if disconnect *test 2 54
 #do nutritional facts brodi
@@ -32,7 +26,6 @@ class ClientGUI:
         self._not_logged_in_home=None
         self._text_Received=None
         self._scroll_bar=None
-        self._level=None
         self._greeting=None
         self._default_greeting=None
         self._btn_Update=None
@@ -63,8 +56,8 @@ class ClientGUI:
         self._ingredients=None
 
         self.image_for_card_area=CTkImage(Image.open(r"Images/chef_hat.png"),size=(150,150))
-        self.closed_refrigerator_image=CTkImage(Image.open(r"Images/Closed_refrigerator.png"),size=(300,400))
-        self.opened_refrigerator_image=CTkImage(Image.open(r"Images/Opened_refrigerator.png"),size=(295,395))
+        self.closed_refrigerator_image=CTkImage(Image.open(r"Images/Closed_refrigerator2.png"),size=(300,400))
+        self.opened_refrigerator_image=CTkImage(Image.open(r"Images/Opened_refrigerator2.png"),size=(295,395))
         self._refrigerator=None
 
         self._btn_refrigerator=None
@@ -74,7 +67,7 @@ class ClientGUI:
         self._connection.start()
 
         self._client_status = ClientStatue()
-
+        self._specific_frame=None
         self.create_ui()
 
     def create_ui(self):
@@ -149,9 +142,6 @@ class ClientGUI:
         self._btn_clear = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#C850C0",hover_color="#4185D0", font=("Arial",17),command=self.on_click_delete_all_btn)
         self._btn_clear.place(x=100,y=60)
 
-        self._level=CTkLabel(master=self._home, font=("Calibri",25))
-        self._level.place(x=5,y=25)
-
         self._btn_sign_out = CTkButton(master=self._home, text="Sign out", font=("Calibri", 17), fg_color="#C850C0",hover_color="#4185D0", height=30, width=80, command=self.on_click_sign_out)
         self._btn_sign_out.place(x=915, y=10)
 
@@ -176,28 +166,71 @@ class ClientGUI:
     def on_click_add(self):
         self._ingredients.add_ingredient()
         self._ingredients.move_down()
-
     def initiate_disconnected_home(self):
         try:
-            self._home.pack_forget()
+            if self._ingredients:
+                self._ingredients.clear_frames()
+            if self._refrigerator:
+                self._refrigerator.clear_frames()
+            self.forget_all_frames()
+            self.on_click_destroy_specific_frame()
             self._not_logged_in_home.pack(fill="both",expand=True)
             self.on_click_reset()
             self.update_default_greeting()
             self._username = ""
-            if self._ingredients:
-                self._ingredients.clear_ingredients()
         except: #remove again
            pass
 
-
-    def forget_widget(self,widget):
-        if widget:
-            widget.place_forget()
+    def forget_all_frames(self):
+        for child in self._container.winfo_children():
+                write_to_log(child)
+                child.pack_forget()
 
     def on_click_refrigerator(self):
-        self._refrigerator=Refrigerator(self._container,self._home)
+        def send_ingredient(cmd, data):
+            self._client_bl.send_data(cmd, data)
+        def receive_confirmation() -> bool:
+            msg = self._client_bl.receive_msg()
+            return bool(msg)
         self._home.pack_forget()
-        self._refrigerator.create_ui()
+        if not self._refrigerator:
+            self._refrigerator=Refrigerator(self._container,self._home,self._client_status,send_ingredient,receive_confirmation)
+            self._refrigerator.create_ui()
+        else:
+            self._refrigerator.initiate_existing_ui(self._client_status.data)
+
+    def on_click_categorize(self,data):
+        self.on_click_destroy_specific_frame()
+        self._specific_frame = DraggableFrame(self._home)
+        self._specific_frame.place(x=125,y=55)
+        scrollable_frame=CTkScrollableFrame(master=self._specific_frame,width=250,height=320,corner_radius=15,border_color="blue",border_width=3)
+        scrollable_frame.pack()
+        btn_back = CTkButton(scrollable_frame, text="Back", height=30, width=80, text_color="white",hover_color="#4185D0", font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_destroy_specific_frame)
+        btn_back.pack(padx=(160,2),pady=2)
+        t=threading.Thread(target=lambda: self.initiate_list_frame(scrollable_frame),daemon=True)
+        t.start()
+        self._specific_frame.bind_drag_widget(self._specific_frame)
+
+
+    def initiate_list_frame(self,scrollable_frame):
+        def create_list_frame(new_list):
+            current_frame = CTkFrame(master=scrollable_frame, width=80, height=40, corner_radius=28, fg_color="#5B5FD9")
+            current_frame.pack(pady=3, padx=5, fill="x", anchor='w', )
+            current_entry = CTkEntry(master=current_frame)
+            current_entry.place(x=5, y=7)
+            current_entry.insert(0, new_list)
+            current_entry.configure(state="disabled")
+            current_select_btn = CTkButton(master=current_frame, width=30, height=30, text="✓", text_color="green",
+                                           fg_color="black", font=("Arial", 18))
+            current_select_btn.place(x=150, y=5)
+
+        for i in self._client_status.data.keys():
+            create_list_frame(i)
+
+    def on_click_destroy_specific_frame(self):
+        if self._specific_frame:
+            self._specific_frame.after(0, self._specific_frame.destroy)
+            self._specific_frame = None
 
     def on_click_make(self):
         #only send data if client is connected maybe simply make btn disabled for furture
@@ -208,8 +241,11 @@ class ClientGUI:
         args=self._client_bl.get_parameters(self._time_slider.get())
         self._client_bl.send_data(cmd,args)
         self._home.pack_forget()
-        self._recipes=Recipes(self._container,self._home,self._client_status,self._client_bl.receive_msg)
-        self._recipes.create_ui()
+        if not self._recipes:
+            self._recipes=Recipes(self._container,self._home,self._client_status,self._client_bl.receive_msg)
+            self._recipes.create_ui()
+        else:
+            self._recipes.initiate_existing_ui()
 
     def on_click_login(self):
         def on_click_sign_in(data):
@@ -251,35 +287,39 @@ class ClientGUI:
     def initiate_signed_in(self):
         self._home.pack(fill="both",expand=True)
         def send_ingredient(cmd,data):
-            self._client_bl.send_data(cmd, data)
+            data[0]="Main"
+            self._client_bl.send_data(cmd,data)
         def receive_confirmation() ->bool:
             msg = self._client_bl.receive_msg()
             return bool(msg)
         def update_add_btn(state):
             self._btn_add.configure(state=state)
         if not self._ingredients:
-            self._ingredients = Ingredients(self._home, self._client_status,send_ingredient, receive_confirmation,update_add_btn,width=270,height=300,fg_color="#1E1E2E",border_width=2,border_color="#3A3F8F")
+            self._ingredients = Ingredient(self._home, self._client_status,send_ingredient, receive_confirmation,update_add_btn,self.on_click_categorize,width=270,height=300,fg_color="#1E1E2E",border_width=2,border_color="#3A3F8F")
+            self._ingredients.set_internal_ingredient_look(width=80,height=40,corner_radius=28,fg_color="#5B5FD9")
             self._ingredients.place(x=5, y=100)
         self._btn_add.configure(state='disabled')
         self._btn_clear.configure(state='disabled')
-        t=threading.Thread(target=self.initiate_first_ingredients,daemon=True)
+        self.receive_user_data()
+        t=threading.Thread(target= self.initiate_first_ingredients,daemon=True)
         t.start()
         self.update_greeting()
-        level_msg = self._client_bl.receive_msg()
-        self._level.configure(text=Levels[level_msg])
         self.on_click_reset()
+
+    def receive_user_data(self):
+        data=self._client_bl.receive_msg()
+        data=json.loads(data)
+        self._client_status.data=data
 
     def on_click_delete_all_btn(self):
         self._client_bl.send_data("DELETE_ALL","")
         succeed=bool(self._client_bl.receive_msg())
         if succeed:
-            self._ingredients.clear_ingredients()
+            self._ingredients.clear_frames()
             self._btn_add.configure(state="normal")
 
     def initiate_first_ingredients(self):
-        ingredient_list = self._client_bl.receive_msg()
-        ingredient_list = json.loads(ingredient_list)
-        for i in ingredient_list:
+        for i in self._client_status.data["Main"]:
             try:
                 if self._client_status.connected and self._client_status.signed_in:
                     self._ingredients.initiate_first_ingredients(i)

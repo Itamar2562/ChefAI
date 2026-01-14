@@ -1,6 +1,7 @@
 import logging
 import socket
 from datetime import datetime
+import time
 import threading
 from customtkinter import *
 from cryptography.hazmat.primitives.asymmetric import rsa,padding
@@ -19,6 +20,7 @@ HEADER_LEN = 4
 FORMAT= 'utf-8'
 DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
 INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL"]
+LIST_CMD=["LIST","DELETE_LIST"]
 Levels={
     '1':"Rookie",
     '2': "Novice",
@@ -100,4 +102,6 @@ def check_cmd(cmd):
         return 2
     if cmd in INGREDIENTS_CMD:
         return 3
+    if cmd in LIST_CMD:
+        return 4
 

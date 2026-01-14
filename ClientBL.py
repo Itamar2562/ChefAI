@@ -1,5 +1,10 @@
 from Protocol import *
 
+class ClientStatue:
+    def __init__(self):
+        self.connected=False
+        self.signed_in=False
+        self.data={}
 
 class ClientBL:
     def __init__(self,ip,port):
@@ -44,6 +49,7 @@ class ClientBL:
         write_to_log(f"session key : {session_key}")
         self.fernet = Fernet(session_key)
 
+
     def encrypt(self, data):
         return self.fernet.encrypt(data)
 
@@ -83,6 +89,7 @@ class ClientBL:
 
 
     def send_data(self,cmd,args,verbose=True):
+        write_to_log(f"data: {cmd},{args}")
         try:
             args=encode_data(args)
             cmd=encode_data(cmd)
