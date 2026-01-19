@@ -36,6 +36,7 @@ class ServerBL:
                 for client_thread in self._client_handler:
                     #doesn't work cus I need to close the client_socket somehow I don't know how honestly im cooked
                     client_thread.join()
+        close_conn()
         self._client_handler.clear()
         self._srv_is_running=False
         if self._server_socket is not None:
@@ -98,10 +99,16 @@ class ClientHandler(threading.Thread):
         if cmd == "SIGN_OUT":
             self._current_id = -1
             return
-        msg = create_response_msg_db(cmd, data)
+        data=json.loads(data)
+        username=data['name']
+        password=data['password']
+        write_to_log(username)
+        write_to_log(password)
+        msg = create_response_msg_db(cmd, username,password)
+        write_to_log(f"msg is {msg}")
         self.send_data("LOGIN",msg)
         if msg == "connected":
-            self.initiate_sign_in(data)
+            self.initiate_sign_in(username,password)
 
     def handle_ingredients(self,cmd,data):
         write_to_log("got here maybe")
@@ -114,6 +121,10 @@ class ClientHandler(threading.Thread):
         elif cmd=="DELETE_ALL":
             response=self.remove_all_ingredients_from_db()
             self.send_data("DELETE_ALL",response)
+        elif cmd=="TRANSFER":
+            response=self.transfer_ingredients_from_db(data)
+            self.send_data("TRANSFER",response)
+
 
     #data will look like this [10.0, 3, "fried", "oven", "soup", 3, "halal", "vegan", "kosher"] False this is goofy version
     #to separate the data I will get length and skip time with it
@@ -186,49 +197,62 @@ class ClientHandler(threading.Thread):
         except:
             return False
 
-    def add_ingredient_to_db(self,ingredient):
-        try:
-            ingredient=json.loads(ingredient)
-            succeed = handle_ingredient_update(self._current_id,ingredient)
-            if succeed:
-                return "True"
-            return "False"
-        except Exception as e:
-            write_to_log(e)
+    def create_response_dict(self,code,item,ingredient_list=""):
+        response= {"code": code, "item": item, "list": ingredient_list}
+        return response
 
-    def add_list_to_db(self,ing_list):
-        ing_list=json.loads(ing_list)
-        succeed = handle_db_list_update(self._current_id,ing_list )
-        if succeed:
-            return "True"
-        return "False"
+    def add_ingredient_to_db(self,ingredient):
+        ingredient=json.loads(ingredient)
+        list_name = ingredient[0]
+        prev_name = ingredient[1]
+        curr_name = ingredient[2]
+        code = handle_ingredient_update(self._current_id, list_name,prev_name, curr_name)
+        response=self.create_response_dict(code,curr_name,list_name)
+        return  response
+
+    def add_list_to_db(self,curr_list):
+        curr_list=json.loads(curr_list)
+        code = handle_db_list_update(self._current_id,curr_list)
+        response=self.create_response_dict(code,curr_list)
+        return response
+
 
     def remove_ingredient_from_db(self,data):
-        try:
-            data=json.loads(data)
-            write_to_log(data[0])
-            write_to_log(data[1])
-            succeed=delete_ingredient(self._current_id,data[0],data[1])
-            if succeed:
-                return "True"
-            return "False"
-        except Exception as e:
-            write_to_log(e)
+        data=json.loads(data)
+        write_to_log(data[0])
+        write_to_log(data[1])
+        list_name: str = data[0]
+        ingredient_name: str = data[1]
+        code=delete_ingredient(self._current_id,list_name,ingredient_name)
+        response=self.create_response_dict(code,ingredient_name,list_name)
+        return response
+
+
+    def transfer_ingredients_from_db(self,data):
+        data=json.loads(data)
+        src_list = data[0]
+        dst_list = data[1]
+        ingredient = data[2]
+        code=transfer_ingredient(self._current_id,src_list,dst_list,ingredient)
+        response=self.create_response_dict(code,ingredient,dst_list)
+        return response
 
     def remove_all_ingredients_from_db(self):
+        #not working rn
         succeed=remove_all_ingredients(self._current_id)
         if succeed:
             return "True"
         return "False"
-    def remove_list_from_db(self,new_list):
-        succeed=delete_list(self._current_id,new_list)
-        if succeed:
-            return"True"
-        return "False"
 
+    def remove_list_from_db(self,curr_list):
+        curr_list=json.loads(curr_list)[0]
+        code=delete_list(self._current_id,curr_list)
+        response=self.create_response_dict(code,curr_list)
+        return response
 
-    def initiate_sign_in(self,login_data):
-        self._current_id = get_id(login_data)
+    def initiate_sign_in(self,username,password):
+        self._current_id = get_id(username,password)
+        write_to_log(f" id is{self._current_id}")
         data=get_lists_with_ingredients(self._current_id)
         write_to_log(data)
         self.send_data("Ingredients",data)
@@ -237,6 +261,8 @@ class ClientHandler(threading.Thread):
         try:
             args=encode_data(args)
             cmd=encode_data(cmd)
+            write_to_log(f"args: {args}")
+            write_to_log(f"cmd: {cmd}")
             if self._fernet:
                 args = self.encrypt(args)
                 cmd=self.encrypt(cmd)

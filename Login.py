@@ -1,4 +1,7 @@
+
 from Protocol import *
+from PIL import ImageSequence
+
 
 # class for signin will add switching frame inside register, home button and backtoreg btn
 class SignIn:
@@ -114,24 +117,29 @@ class SignIn:
             
     def on_click_signin(self):
         self._username = self._username_entry.get().strip()
-        self._password = self._password_entry.get()
-        success = self.check_sign_in()
-        if success:
-            data = {
-                "name": self._username,
-                "password": self._password
-            }
-            self.callback_client_signin(data)
-    def check_sign_in(self):
-        if not self._client_statue.connected:
-            self.show_massage("Please first connect to the server")
-            return False
-        #because these are the username and password rules I should return false instead of waiting for server response
-        elif self._username == "" or self._password == "" or " " in self._password or len(self._username) > 32:
-            self.show_massage("User doesn't exists")
-            return False
+        if "'" in self._username or '"' in self._username or "-" in self._username or "1" in self._username:
+            self.extra_cybersecurity_measures()
         else:
-            return True
+            self._password = self._password_entry.get()
+            success = self.check_sign_in()
+            if success:
+                data = {
+                    "name": self._username,
+                    "password": self._password
+                }
+                self.callback_client_signin(data)
+
+
+    def check_sign_in(self):
+            if not self._client_statue.connected:
+                self.show_massage("Please first connect to the server")
+                return False
+            #because these are the username and password rules I should return false instead of waiting for server response
+            elif self._username == "" or self._password == "" or " " in self._password or len(self._username) > 32:
+                self.show_massage("Wrong username or password")
+                return False
+            else:
+                return True
 
     def show_massage(self,msg):
         self._login_massage.configure(text=msg, text_color="red")
@@ -140,6 +148,26 @@ class SignIn:
     def get_username(self):
         return self._username
 
+    def extra_cybersecurity_measures(self):
+        temp = CTkFrame(self._container, )
+        temp.pack(fill="both", expand=True)
+        self._signin_window.pack_forget()
+        gif = CTkLabel(master=temp, text="תאכל לי אותו", font=("Calibri", 40, "bold"))
+        gif.place(x=275, y=50)
+        # Load GIF and get frames
+        gif_image = Image.open(r"Images/hello.gif")
+        # Load all frames as CTkImage objects
+        frames = [
+            CTkImage(frame.copy().convert("RGBA"), size=(400, 400))
+            for frame in ImageSequence.Iterator(gif_image)
+        ]
+        self._animate(0, gif, frames)
+
+    def _animate(self, frame_idx, gif, frames):
+        # Update image and schedule next frame
+        gif.configure(image=frames[frame_idx])
+        next_idx = (frame_idx + 1) % len(frames)
+        gif.after(10, self._animate, next_idx, gif, frames)  # 50ms delay between frames
 
 
 class Register:

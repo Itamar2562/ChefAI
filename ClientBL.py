@@ -1,10 +1,10 @@
 from Protocol import *
+import queue
 
 class ClientStatue:
     def __init__(self):
         self.connected=False
         self.signed_in=False
-        self.data={}
 
 class ClientBL:
     def __init__(self,ip,port):
@@ -13,6 +13,7 @@ class ClientBL:
         self.parameters={'time':10.0,'type':"", 'preference':[]}
         self.client_socket=None
         self.fernet=None
+        self.user_data={}
     def reset_parameters(self,time_slider):
         self.parameters['time']=10.0
         self.parameters['type']=""
@@ -78,6 +79,43 @@ class ClientBL:
             self.client_socket=None
             return False
 
+    def update_user_info(self, cmd, args):
+        write_to_log(self.user_data)
+        if cmd == "ADD":
+            list_name=args[0]
+            prev = args[1]
+            curr = args[2]
+            if prev in self.user_data[ list_name]:
+                self.user_data[ list_name].remove(prev)
+                self.user_data[ list_name].append(curr)
+            else:
+                self.user_data[list_name].append(curr)
+        if cmd == "ADD_LIST":
+            prev_name = args[0]
+            curr_name = args[1]
+            if prev_name in self.user_data.keys():
+                self.user_data[curr_name]=self.user_data[prev_name]
+                del self.user_data[prev_name]
+            else:
+                self.user_data[curr_name]=[]
+        elif cmd == "DELETE":
+            list_name=args[0]
+            curr = args[1]
+            self.user_data[list_name].remove(curr)
+        elif cmd == "DELETE_LIST":
+            curr=args[0]
+            del self.user_data[curr]
+        elif cmd=="TRANSFER":
+            src_list=args[0]
+            dst_list=args[1]
+            ingredient=args[2]
+            self.user_data[src_list].remove(ingredient)
+            self.user_data[dst_list].append(ingredient)
+        write_to_log(self.user_data)
+
+
+
+    #add a recieve queue instead
     def receive_msg(self,need_bytes=False):
         if need_bytes:
             cmd, msg=receive_bytes_msg(self.client_socket)

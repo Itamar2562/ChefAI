@@ -19,13 +19,18 @@ BUFFER_SIZE = 1024
 HEADER_LEN = 4
 FORMAT= 'utf-8'
 DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
-INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL"]
+INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL","TRANSFER"]
 LIST_CMD=["LIST","DELETE_LIST"]
-Levels={
-    '1':"Rookie",
-    '2': "Novice",
-    '3':"Expert"
+
+Codes={
+    "200": "ok",
+    "304" : "not modified",
+    "500" :"server error"
 }
+
+
+
+
 
 # prepare Log file
 LOG_FILE = 'LOG.log'

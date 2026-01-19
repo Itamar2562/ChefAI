@@ -6,14 +6,22 @@ from Protocol import write_to_log
 DB_NAME = "Database.db"
 TABLE_USERS = "Users"
 
-# close at end
-def create_response_msg_db(cmd: str,data :str) ->str:
+def get_conn():
     conn = sqlite3.connect(DB_NAME)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+# close at end
+
+
+
+def create_response_msg_db(cmd: str,username,password) ->str:
+    conn= get_conn()
+    write_to_log(conn)
+    cursor=conn.cursor()
     try:
         # connect to DB(if it doesn't exist, it will be created)
         # Create object 'curser' to execute SQL-queries
-        cursor = conn.cursor()
-
         # table creation user table
         # Users table
         cursor.execute("""
@@ -45,45 +53,53 @@ def create_response_msg_db(cmd: str,data :str) ->str:
             FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
         )
         """)
-        data=json.loads(data)
-        write_to_log(data)
         # INSERT DATA
-        password=hash_password(data["password"])
+        password=hash_password(password)
+        response=""
         if cmd=="SIGNIN":
-            query = "SELECT EXISTS (SELECT 1 FROM users WHERE  username = ? AND password = ?)"
-            cursor.execute(query, (data["name"], password))
-            result = cursor.fetchone()[0]
-            if result==1:
-                response = "connected"
-            else:
-                response="User doesn't exists"
+           response=sign_in(conn,username,password)
         elif cmd=="REG":
-            # Insert data record
-            cursor.execute('''
-            INSERT INTO users(username, password) VALUES(?,?)
-            ''', (data["name"],password))
-            user_id = cursor.lastrowid
-            cursor.execute(
-                "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 1)",
-                (user_id, "Main")
-            )
-            # confirm and save data to DB
-            conn.commit()
-            response="saved to database"
-        # close connection
-        else:
-            response="Error"
-
-        conn.close()
+           response=register(conn,username,password)
         return response
-        #response = data
     except Exception as E:
-        if str(E)=="UNIQUE constraint failed: users.name":
-            response = f"Username already exists"
-        else:
-            response=f"Error {E}"
-        conn.rollback()
+        write_to_log(f"database Error {E}")
+        return f"Error"
+
+
+def sign_in(conn,username,password):
+    write_to_log("got here")
+    cursor=conn.cursor()
+    query = "SELECT EXISTS (SELECT 1 FROM users WHERE  username = ? AND password = ?)"
+    cursor.execute(query, (username, password))
+    result = cursor.fetchone()[0]
+    if result == 1:
+        response = "connected"
+    else:
+        response = "Wrong username or password"
+    return response
+
+def register(conn,username,password):
+    cursor=conn.cursor()
+    try:
+        # Insert data record
+        cursor.execute('''INSERT INTO users(username, password) VALUES(?,?)''', (username, password))
+        user_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 1)",
+            (user_id, "Main")
+        )
+        # confirm and save data to DB
+        conn.commit()
+        response = "saved to database"
         return response
+    except Exception as E:
+        if str(E) == "UNIQUE constraint failed: users.username":
+            response = f"Username taken"
+        else:
+            response = f"Error {E}"
+            conn.rollback()
+        return response
+
 
 #def generate_key() -> bytes:
  #   return Fernet.generate_key()
@@ -95,16 +111,14 @@ def save_client_data(client_data):
 def hash_password(password):
     return str(hashlib.sha256(password.encode('utf-8')).hexdigest())
 
-def get_id(data):
-    conn = sqlite3.connect(DB_NAME)
-    curser = conn.cursor()
-    data = json.loads(data)
-    password = hash_password(data["password"])
+def get_id(username,password):
+    conn = get_conn()
+    cursor = conn.cursor()
+    password = hash_password(password)
     try:
         query = "SELECT id FROM users WHERE username = ? AND password = ?"
-        curser.execute(query, (data["name"], password))
-        result = curser.fetchone()[0]
-        conn.close()
+        cursor.execute(query, (username, password))
+        result = cursor.fetchone()[0]
         return result
     except Exception as e:
         write_to_log(e)
@@ -112,7 +126,7 @@ def get_id(data):
         return -1
 
 def get_list_id_by_name(user_id, list_name):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -125,22 +139,19 @@ def get_list_id_by_name(user_id, list_name):
     row = cursor.fetchone()
     return row[0] if row else None
 
-def handle_ingredient_update(user_id,data):
+def handle_ingredient_update(user_id,list_name,prev_name, curr_name):
     write_to_log("got here 2213")
-    prev_name=data[1]
-    curr_name=data[2]
-    list_id=get_list_id_by_name(user_id,data[0])
+    list_id=get_list_id_by_name(user_id, list_name)
 
     if not prev_name:
-        return create_ingredient(user_id, list_id, curr_name)
+        return create_ingredient(list_id, curr_name)
 
     if prev_name != curr_name:
-        return rename_ingredient(user_id, list_id, prev_name, curr_name)
-
+        return rename_ingredient(list_id, prev_name, curr_name)
     return False
 
-def create_ingredient(user_id, list_id, name):
-    conn = sqlite3.connect(DB_NAME)
+def create_ingredient(list_id, name):
+    conn = get_conn()
     cursor = conn.cursor()
     try:
         # prevent duplicates in same list
@@ -152,7 +163,7 @@ def create_ingredient(user_id, list_id, name):
             (list_id, name)
         )
         if cursor.fetchone():
-            return False
+            return "304"
         cursor.execute(
             """
             INSERT INTO ingredients (list_id, name)
@@ -161,14 +172,14 @@ def create_ingredient(user_id, list_id, name):
             (list_id, name)
         )
         conn.commit()
-        return True
+        return "200"
     except Exception as e:
         write_to_log(e)
         conn.rollback()
-        return False
+        return "500"
 
-def rename_ingredient(user_id, list_id, prev_name, new_name):
-    conn = sqlite3.connect(DB_NAME)
+def rename_ingredient(list_id, prev_name, new_name):
+    conn = get_conn()
     cursor = conn.cursor()
     # block duplicate names in same list
     try:
@@ -180,7 +191,7 @@ def rename_ingredient(user_id, list_id, prev_name, new_name):
             (list_id, new_name)
         )
         if cursor.fetchone():
-            return False
+            return "304"
 
         cursor.execute(
             """
@@ -192,14 +203,43 @@ def rename_ingredient(user_id, list_id, prev_name, new_name):
         )
 
         if cursor.rowcount == 0:
-            return False
+            return "500"
         conn.commit()
-        conn.close()
-        return True
+        return "200"
     except Exception as e:
         write_to_log(e)
         conn.rollback()
         return False
+
+def transfer_ingredient(user_id,src_list,dst_list,ingredient):
+    conn = get_conn()
+    cursor = conn.cursor()
+    try:
+        write_to_log("got to transf")
+        src_list_id=get_list_id_by_name(user_id,src_list)
+        dst_list_id=get_list_id_by_name(user_id,dst_list)
+        #check if ingredient in dst list
+        cursor.execute(
+            """
+            SELECT id FROM ingredients
+            WHERE list_id=? AND name=?
+            """,(dst_list_id, ingredient))
+        if cursor.fetchone():
+            return "304"  # already exists
+
+        cursor.execute(
+            """
+            UPDATE ingredients
+            SET list_id=?
+            WHERE list_id=? AND name=?
+            """,
+            (dst_list_id, src_list_id, ingredient)
+        )
+        conn.commit()
+        return "200"
+    except:
+        conn.rollback()
+        return "500"
 
 def handle_db_list_update(user_id:int, data:list):
     write_to_log("im here")
@@ -212,10 +252,10 @@ def handle_db_list_update(user_id:int, data:list):
     if prev_name != curr_name:
         return rename_list(user_id, prev_name, curr_name)
 
-    return False
+    return "500"
 
 def create_list(user_id, list_name):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -223,20 +263,20 @@ def create_list(user_id, list_name):
             (user_id, list_name)
         )
         if cursor.fetchone():
-            return False  # already exists
+            return "304"  # already exists
 
         cursor.execute(
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
             (user_id, list_name)
         )
         conn.commit()
-        return True
+        return "201"
     except:
         conn.rollback()
-        return False
+        return "500"
 
 def rename_list(user_id, prev_name, new_name):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
     cursor = conn.cursor()
     # Prevent duplicate names
     cursor.execute(
@@ -244,7 +284,7 @@ def rename_list(user_id, prev_name, new_name):
         (user_id, new_name)
     )
     if cursor.fetchone():
-        return False
+        return "304"
 
     cursor.execute(
         """
@@ -256,13 +296,13 @@ def rename_list(user_id, prev_name, new_name):
     )
 
     if cursor.rowcount == 0:
-        return False  # list not found
+        return "500"  # list not found
 
     conn.commit()
-    return True
+    return "200"
 
 def get_lists_with_ingredients(user_id: int) -> dict[str, list[str]]:
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -285,7 +325,7 @@ def get_lists_with_ingredients(user_id: int) -> dict[str, list[str]]:
     return result
 
 def delete_ingredient(user_id: int, list_name: str, ingredient_name: str):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
     cursor = conn.cursor()
     try:
         write_to_log(user_id)
@@ -297,28 +337,26 @@ def delete_ingredient(user_id: int, list_name: str, ingredient_name: str):
             (ingredient_name, user_id, list_name)
         )
         conn.commit()
-        conn.close()
-        return True
+        return "200"
     except Exception as e:
         write_to_log(e)
         conn.rollback()
-        return False
+        return "500"
 
 def remove_all_ingredients(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    curser = conn.cursor()
+    conn = get_conn()
+    cursor = conn.cursor()
     try:
         query = "SELECT ingredients FROM users WHERE id= ?"
-        curser.execute(query, (user_id,))
-        ingredients_list = curser.fetchone()[0]
+        cursor.execute(query, (user_id,))
+        ingredients_list = cursor.fetchone()[0]
         ingredients_list = json.loads(ingredients_list)
         ingredients_list.clear()
         ingredients_list = json.dumps(ingredients_list)
         query = "UPDATE users SET ingredients = ? WHERE id = ?"
-        curser.execute(query, (ingredients_list, user_id))
+        cursor.execute(query, (ingredients_list, user_id))
         # confirm and save data to DB
         conn.commit()
-        conn.close()
         return True
     except Exception as E:
         write_to_log(E)
@@ -326,7 +364,7 @@ def remove_all_ingredients(user_id):
         return False
 
 def delete_list(user_id: int, list_name: str):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_conn()
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -336,8 +374,12 @@ def delete_list(user_id: int, list_name: str):
         """,
         (list_name, user_id)
     )
+    conn.commit()
+    return "200"
 
-
+def close_conn():
+    conn=get_conn()
+    conn.close()
 
 # def handle_registration(client_socket) :
 #     data = client_socket.recv(1024).decode()
