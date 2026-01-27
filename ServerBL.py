@@ -86,7 +86,9 @@ class ClientHandler(threading.Thread):
                    self.handle_ingredients(cmd,data)
                elif cmd_type==4:
                    self.handle_list(cmd,data)
-            except:
+            except Exception as e:
+                if str(e)!="[WinError 10035] A non-blocking socket operation could not be completed immediately":
+                    write_to_log(e)
                 if not self.check_conn():
                     self.callback_update_client_handler(self) #send the thread to be removed
                     write_to_log(f"[Server_BL] Client: {self._client_address} disconnected")
@@ -105,6 +107,9 @@ class ClientHandler(threading.Thread):
         write_to_log(username)
         write_to_log(password)
         msg = create_response_msg_db(cmd, username,password)
+        curr_id=get_id(username,password)
+        if cmd=="REG" and data['default']==1:
+            put_default_lists(curr_id)
         write_to_log(f"msg is {msg}")
         self.send_data("LOGIN",msg)
         if msg == "connected":
@@ -119,7 +124,7 @@ class ClientHandler(threading.Thread):
             response = self.remove_ingredient_from_db(data)
             self.send_data("DELETE",response)
         elif cmd=="DELETE_ALL":
-            response=self.remove_all_ingredients_from_db()
+            response=self.remove_all_ingredients_from_db(data)
             self.send_data("DELETE_ALL",response)
         elif cmd=="TRANSFER":
             response=self.transfer_ingredients_from_db(data)
@@ -139,14 +144,13 @@ class ClientHandler(threading.Thread):
         ingredients=json.dumps(ingredients)
         #in client receive create a receive loop getting it one by one
         if len(parameters['type'])==0:
-            ai_response=send_and_receive_ai_request(parameters['time'],"general",parameters['preference'], ingredients)
+            ai_response=send_and_receive_ai_request(parameters['time'],"general",parameters['difficulty'],parameters['preference'], ingredients)
             write_to_log(ai_response)
             self.send_data("AI",ai_response)
         else:
-            ai_response=send_and_receive_ai_request(parameters['time'],parameters['type'],parameters['preference'], ingredients)
+            ai_response=send_and_receive_ai_request(parameters['time'],parameters['type'],parameters['difficulty'],parameters['preference'], ingredients)
             write_to_log(ai_response)
             self.send_data("AI",ai_response)
-        self.send_data("AI","END")
 
     def extract_all_ingredients(self,data):
         write_to_log(data)
@@ -237,12 +241,13 @@ class ClientHandler(threading.Thread):
         response=self.create_response_dict(code,ingredient,dst_list)
         return response
 
-    def remove_all_ingredients_from_db(self):
-        #not working rn
-        succeed=remove_all_ingredients(self._current_id)
-        if succeed:
-            return "True"
-        return "False"
+    def remove_all_ingredients_from_db(self,data):
+        data=json.loads(data)
+        list_name=data[0]
+        write_to_log(list_name)
+        code=remove_all_ingredients(self._current_id,list_name)
+        response=self.create_response_dict(code,list_name)
+        return response
 
     def remove_list_from_db(self,curr_list):
         curr_list=json.loads(curr_list)[0]

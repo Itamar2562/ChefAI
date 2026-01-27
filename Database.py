@@ -1,10 +1,11 @@
 import sqlite3
 import json
 import hashlib
-
 from Protocol import write_to_log
 DB_NAME = "Database.db"
 TABLE_USERS = "Users"
+DEFAULT_LISTS=["Carbs","Vegetables","Fruits","Protein","Liquids","Spices"]
+
 
 def get_conn():
     conn = sqlite3.connect(DB_NAME)
@@ -100,6 +101,17 @@ def register(conn,username,password):
             conn.rollback()
         return response
 
+def put_default_lists(user_id):
+    write_to_log(user_id)
+    conn=get_conn()
+    cursor=conn.cursor()
+    for list_name in DEFAULT_LISTS:
+        cursor.execute(
+            "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
+            (user_id, list_name))
+    conn.commit()
+    return True
+
 
 #def generate_key() -> bytes:
  #   return Fernet.generate_key()
@@ -154,16 +166,8 @@ def create_ingredient(list_id, name):
     conn = get_conn()
     cursor = conn.cursor()
     try:
-        # prevent duplicates in same list
-        cursor.execute(
-            """
-            SELECT id FROM ingredients
-            WHERE list_id=? AND name=?
-            """,
-            (list_id, name)
-        )
-        if cursor.fetchone():
-            return "304"
+        if ingredient_exists(list_id,name):
+            return "409"
         cursor.execute(
             """
             INSERT INTO ingredients (list_id, name)
@@ -183,16 +187,7 @@ def rename_ingredient(list_id, prev_name, new_name):
     cursor = conn.cursor()
     # block duplicate names in same list
     try:
-        cursor.execute(
-            """
-            SELECT id FROM ingredients
-            WHERE list_id=? AND name=?
-            """,
-            (list_id, new_name)
-        )
-        if cursor.fetchone():
-            return "304"
-
+        ingredient_exists(list_id,prev_name)
         cursor.execute(
             """
             UPDATE ingredients
@@ -211,6 +206,19 @@ def rename_ingredient(list_id, prev_name, new_name):
         conn.rollback()
         return False
 
+def ingredient_exists(dst_list_id,ingredient):
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id FROM ingredients
+        WHERE list_id=? AND name=?
+        """, (dst_list_id, ingredient))
+    if cursor.fetchone():
+        return True
+    return False
+
+
 def transfer_ingredient(user_id,src_list,dst_list,ingredient):
     conn = get_conn()
     cursor = conn.cursor()
@@ -219,14 +227,8 @@ def transfer_ingredient(user_id,src_list,dst_list,ingredient):
         src_list_id=get_list_id_by_name(user_id,src_list)
         dst_list_id=get_list_id_by_name(user_id,dst_list)
         #check if ingredient in dst list
-        cursor.execute(
-            """
-            SELECT id FROM ingredients
-            WHERE list_id=? AND name=?
-            """,(dst_list_id, ingredient))
-        if cursor.fetchone():
-            return "304"  # already exists
-
+        if ingredient_exists(dst_list_id,ingredient):
+            return "409"
         cursor.execute(
             """
             UPDATE ingredients
@@ -240,6 +242,7 @@ def transfer_ingredient(user_id,src_list,dst_list,ingredient):
     except:
         conn.rollback()
         return "500"
+
 
 def handle_db_list_update(user_id:int, data:list):
     write_to_log("im here")
@@ -258,24 +261,19 @@ def create_list(user_id, list_name):
     conn = get_conn()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            "SELECT id FROM lists WHERE user_id=? AND name=?",
-            (user_id, list_name)
-        )
-        if cursor.fetchone():
-            return "304"  # already exists
-
+        if list_exists(user_id,list_name):
+           return "409"
         cursor.execute(
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
             (user_id, list_name)
         )
         conn.commit()
-        return "201"
+        return "200"
     except:
         conn.rollback()
         return "500"
 
-def rename_list(user_id, prev_name, new_name):
+def list_exists(user_id,new_name):
     conn = get_conn()
     cursor = conn.cursor()
     # Prevent duplicate names
@@ -284,8 +282,15 @@ def rename_list(user_id, prev_name, new_name):
         (user_id, new_name)
     )
     if cursor.fetchone():
-        return "304"
+        return True
+    return False
 
+
+def rename_list(user_id, prev_name, new_name):
+    conn = get_conn()
+    cursor = conn.cursor()
+    if list_exists(user_id,new_name):
+        return "409"
     cursor.execute(
         """
         UPDATE lists
@@ -343,25 +348,19 @@ def delete_ingredient(user_id: int, list_name: str, ingredient_name: str):
         conn.rollback()
         return "500"
 
-def remove_all_ingredients(user_id):
+def remove_all_ingredients(user_id,list_name):
     conn = get_conn()
     cursor = conn.cursor()
     try:
-        query = "SELECT ingredients FROM users WHERE id= ?"
-        cursor.execute(query, (user_id,))
-        ingredients_list = cursor.fetchone()[0]
-        ingredients_list = json.loads(ingredients_list)
-        ingredients_list.clear()
-        ingredients_list = json.dumps(ingredients_list)
-        query = "UPDATE users SET ingredients = ? WHERE id = ?"
-        cursor.execute(query, (ingredients_list, user_id))
-        # confirm and save data to DB
+        cursor.execute("""
+        DELETE FROM ingredients WHERE list_id = ( SELECT id FROM lists WHERE user_id = ?AND name = ?)
+        """,(user_id,list_name ))
         conn.commit()
-        return True
+        return "200"
     except Exception as E:
         write_to_log(E)
         conn.rollback()
-        return False
+        return "500"
 
 def delete_list(user_id: int, list_name: str):
     conn = get_conn()

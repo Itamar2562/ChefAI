@@ -23,9 +23,11 @@ INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL","TRANSFER"]
 LIST_CMD=["LIST","DELETE_LIST"]
 
 Codes={
-    "200": "ok",
-    "304" : "not modified",
-    "500" :"server error"
+    "200": "ok", #response
+    "201": "created", #when creating smg
+    "401": "Unauthorized", #when pw isn't right
+    "409" : "conflict", #when trying to add smg that already exists
+    "500" :"server error" #error
 }
 
 

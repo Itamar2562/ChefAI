@@ -2,22 +2,23 @@ from Protocol import *
 
 class ScrollableFrameBase(CTkScrollableFrame):
     def __init__(self, home_window, callback_send_data, callback_receive_confirmation, callback_update_user_info,
-                 callback_update_buttons, width=300, height=300, **kwargs):
+                 callback_update_buttons,on_click_destroy_specific_frame, width=300, height=300, **kwargs):
         super().__init__(master=home_window,width=width,height=height,**kwargs)
         self.callback_update_buttons = callback_update_buttons
         self.is_currently_editing = False
-        self.new = False
-        self._internal_ingredient_look = None
+        self.new_inner_frame = False
+        self._internal_frame_look = None
+        self.animating=False
+        self.new_temp_frame=None
         self.callback_send_data = callback_send_data
         self.callback_receive_confirmation = callback_receive_confirmation
         self.callback_update_user_info=callback_update_user_info
+        self.callback_destroy_specific_frame=on_click_destroy_specific_frame
         self.previous = ""
-        self.animating=False
         self._placeholder_for_scrollbar = None  # adding a frame resets the scrollbar
 
     def confirm_mode(self,current_entry:CTkEntry,current_btn:CTkButton):
         #make sure there isn't any whitesspaces
-        write_to_log("confirm mode")
         data=current_entry.get().strip()
         current_entry.delete(0,END)
         current_entry.insert(0,data)
@@ -25,7 +26,7 @@ class ScrollableFrameBase(CTkScrollableFrame):
         current_btn.configure(text="✎", text_color="white")
         self.callback_update_buttons("normal")
         self.is_currently_editing = False
-        self.new=False
+        self.new_inner_frame=False
         current_entry.unbind('<Return>')
 
     def clear_frames(self):
@@ -48,26 +49,28 @@ class ScrollableFrameBase(CTkScrollableFrame):
             self._parent_canvas.after(0,self._parent_frame.destroy)
             self.after(0,self.destroy)
 
-    def set_internal_ingredient_look(self,**kwargs):
-        self._internal_ingredient_look=kwargs
+    def set_internal_frame_look(self, **kwargs):
+        self._internal_frame_look=kwargs
 
     def destroy_frame(self, current_frame):
         current_frame.destroy()
-        self.callback_update_buttons("normal")
         self.is_currently_editing = False
+        self.callback_update_buttons("normal")
 
     def is_editing(self):
         return self.is_currently_editing
 
     def is_animating(self):
         return self.animating
+    def set_animating(self,is_animating:bool):
+        self.animating=is_animating
 
-
-class Ingredient(ScrollableFrameBase):
+class Ingredients(ScrollableFrameBase):
     def __init__(self, name, home_window, callback_send_data, callback_receive_confirmation, callback_update_buttons,
-                 categorize_callback, callback_update_user_info, width=300, height=300, **kwargs):
+                 categorize_callback, callback_update_user_info,on_click_destroy_specific_frame, width=300, height=300, **kwargs):
+
         super().__init__(home_window, callback_send_data, callback_receive_confirmation, callback_update_user_info,
-                         callback_update_buttons, width, height, **kwargs)
+                         callback_update_buttons,on_click_destroy_specific_frame, width, height, **kwargs)
 
         self.categorize_callback=categorize_callback
         self.name=name
@@ -76,13 +79,15 @@ class Ingredient(ScrollableFrameBase):
         if self._placeholder_for_scrollbar:
             self._placeholder_for_scrollbar.destroy()
             self._placeholder_for_scrollbar=None
+        self.callback_destroy_specific_frame()
         self.callback_update_buttons("disabled")
         self.is_currently_editing=True
-        self.new=True
+        self.new_inner_frame=True
         self.previous=""
         #create the frame
-        current_frame=CTkFrame(master=self,**self._internal_ingredient_look)
+        current_frame=CTkFrame(master=self, **self._internal_frame_look)
         current_frame.pack(pady=3,padx=2,fill="x",anchor='w')
+        self.new_temp_frame=current_frame
         current_entry=CTkEntry(master=current_frame)
         current_entry.place(x=5,y=7)
         current_entry.focus()
@@ -97,9 +102,13 @@ class Ingredient(ScrollableFrameBase):
         current_entry.bind('<Return>',lambda event: self.on_click_main_btn(current_entry,current_main_btn))
 
     def on_click_categorize(self,current_entry,current_frame):
-        if self.is_currently_editing:
+        if self.is_currently_editing or self.animating:
             return
         self.categorize_callback(current_entry.get().strip(),current_frame)
+
+    def remove_temp_frame(self):
+        if self.new_temp_frame:
+            self.new_temp_frame.destroy()
 
     def get_name(self):
         return self.name
@@ -111,11 +120,11 @@ class Ingredient(ScrollableFrameBase):
             self._placeholder_for_scrollbar.after(0,self._placeholder_for_scrollbar.destroy)
             self._placeholder_for_scrollbar = None
         try:
-            self.callback_update_buttons("disabled")
+            self.callback_update_buttons("disabled",True)
             self.animating=True
             for ingredient in user_data[self.name]:
                 # create the frame
-                current_frame=CTkFrame(master=self,**self._internal_ingredient_look)
+                current_frame=CTkFrame(master=self, **self._internal_frame_look)
                 current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
                 current_entry = CTkEntry(master=current_frame)
                 current_entry.place(x=5, y=7)
@@ -133,11 +142,10 @@ class Ingredient(ScrollableFrameBase):
                                                text_color="red",fg_color="black", font=("Arial", 18),
                                                command=lambda frame=current_frame,entry=current_entry: self.on_click_delete_btn(frame, entry))
                 current_delete_btn.place(x=220, y=5)
-                time.sleep(0.05)
-            self.callback_update_buttons("normal")
+                time.sleep(0.02)
             self.animating=False
+            self.callback_update_buttons("normal",True)
         except Exception as e:
-            self.animating=False
             write_to_log(f"initiate_first_ingredients_ exception: {e}")
             return
 
@@ -152,12 +160,13 @@ class Ingredient(ScrollableFrameBase):
 
     def on_click_main_btn(self,current_entry:CTkEntry,current_btn:CTkButton):
         current_state = current_entry.cget("state")
+        #user pressed other edit btn while editing->do nothing
+        if current_state == "disabled" and self.is_currently_editing or self.animating:
+            return
         #user pressed to edit ->go to edit mode and do nothing else
+        self.callback_destroy_specific_frame()
         if current_state=="disabled" and not self.is_currently_editing:
             self.edit_mode(current_entry,current_btn)
-            return
-        #user pressed other edit btn while editing->do nothing
-        elif current_state=="disabled" and self.is_currently_editing:
             return
         #user pressed confirm
         new_ingredient=current_entry.get().strip()
@@ -172,45 +181,57 @@ class Ingredient(ScrollableFrameBase):
         if succeed=="ok":
             self.confirm_mode(current_entry,current_btn)
             self.callback_update_user_info("ADD",data)
+            self.new_temp_frame=None
 
 
     def on_click_delete_btn(self,current_frame,current_entry):
         current_state=current_entry.cget("state")
-        #Dont let user delete other frames while editing or delete while editing a current frame
-        #only delete a frame if its a new one or not currently editing
-        if (self.is_currently_editing and current_state=="disabled")or( not self.new and current_state=="normal"):
+        if self.is_currently_editing and current_state=="disabled" or self.animating: #deleting another button while editing
+            return
+        if self.new_inner_frame: #if not saved yet delete in client only
+            self.is_currently_editing = False
+            self.new_inner_frame = False
+            self.destroy_frame(current_frame)
             return
         data=[self.name,current_entry.get().strip()]
-        if data!="" and not self.new: #no reason to send delete on nothing or if new ingredient
+        if current_state=="disabled": #normal delete
             self.callback_send_data("DELETE",data)
             succeed=self.callback_receive_confirmation()
             if succeed=="ok":
+                self.is_currently_editing=False
                 self.destroy_frame(current_frame)
                 self.callback_update_user_info("DELETE",data)
-        else:
-            self.new=False
-            self.destroy_frame(current_frame)
+                self.callback_destroy_specific_frame()
+        else: #delete while editing its own frame
+            data = [self.name,self.previous]
+            self.callback_send_data("DELETE", data)
+            succeed = self.callback_receive_confirmation()
+            if succeed == "ok":
+                self.is_currently_editing=False
+                self.new_inner_frame=False
+                self.destroy_frame(current_frame)
 
 
 class DynamicList(ScrollableFrameBase):
-    def __init__(self, home_window, callback_send_data, callback_receive_confirmation, callback_update_user_info, callback_open_list, callback_close_list,callback_update_buttons, width, height, **kwargs):
-        super().__init__(home_window, callback_send_data, callback_receive_confirmation, callback_update_user_info, callback_update_buttons, width, height, **kwargs)
+    def __init__(self, home_window, callback_send_data, callback_receive_confirmation, callback_update_user_info,
+                 callback_open_list, callback_close_list,callback_update_buttons,
+                 on_click_destroy_specific_frame, width, height, **kwargs):
+        super().__init__(home_window, callback_send_data, callback_receive_confirmation, callback_update_user_info,
+                         callback_update_buttons,on_click_destroy_specific_frame, width, height, **kwargs)
 
         self.callback_open_list=callback_open_list
         self.callback_close_list=callback_close_list
-        self.add_add_ingredient_btn=None
-        self.lists=[]
 
     def add_list(self):
         if self._placeholder_for_scrollbar:
             self._placeholder_for_scrollbar.destroy()
             self._placeholder_for_scrollbar = None
-
+        self.callback_destroy_specific_frame()
         self.callback_update_buttons("disabled")
         self.is_currently_editing = True
-        self.new = True
+        self.new_inner_frame = True
         self.previous = ""
-        current_frame = CTkFrame(master=self, **self._internal_ingredient_look)
+        current_frame = CTkFrame(master=self, **self._internal_frame_look)
         current_frame.pack(pady=3, padx=2, fill="x", anchor='w')
         current_entry = CTkEntry(master=current_frame,width=150,height=40,font=("Calibri",17))
         current_entry.place(x=5, y=7)
@@ -228,15 +249,14 @@ class DynamicList(ScrollableFrameBase):
         if self._placeholder_for_scrollbar:
             self._placeholder_for_scrollbar.after(0,self._placeholder_for_scrollbar.destroy)
             self._placeholder_for_scrollbar=None
-        self.callback_update_buttons("disabled")
         # create the frame
         try:
-            self.animating=True
+            self.callback_update_buttons("disabled",True)
+            self.animating = True
             for curr_list in user_data.keys():
                 if curr_list=="Main":
                     continue
-                self.lists.append(curr_list)
-                current_frame=CTkFrame(master=self,**self._internal_ingredient_look)
+                current_frame=CTkFrame(master=self, **self._internal_frame_look)
                 current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
                 current_entry = CTkEntry(master=current_frame,width=150,height=40,font=("Calibri",17))
                 current_entry.place(x=5, y=7)
@@ -254,28 +274,26 @@ class DynamicList(ScrollableFrameBase):
                                                command=lambda entry=current_entry,frame=current_frame: self.on_click_delete_btn(frame, entry))
                 current_delete_btn.place(x=270, y=5)
                 time.sleep(0.05)
-            self.callback_update_buttons(state="normal")
-            self.animating=False
+            self.animating = False
+            self.callback_update_buttons("normal",True)
         except Exception as e:
-            self.animating=False
             write_to_log(f"list animation error: {e}")
             return
 
-    def get_lists(self):
-        return self.lists
 
     def on_click_main_btn(self,current_entry:CTkEntry,current_btn:CTkButton):
         current_state = current_entry.cget("state")
         #user pressed to edit ->go to edit mode and do nothing else
-        if current_state=="disabled" and not self.is_currently_editing:
-            self.edit_mode(current_entry,current_btn)
+        if current_state == "disabled" and self.is_currently_editing:
             return
-        #user pressed other edit btn while editing->do nothing
-        elif current_state=="disabled" and self.is_currently_editing:
+            # user pressed to edit ->go to edit mode and do nothing else
+        self.callback_destroy_specific_frame()
+        if current_state == "disabled" and not self.is_currently_editing:
+            self.edit_mode(current_entry, current_btn)
             return
         #user pressed confirm
         new_list=current_entry.get().strip()
-        if new_list=="" or len(new_list)>32:
+        if new_list=="" or len(new_list)>24:
             return
         if new_list == self.previous:
             self.confirm_mode(current_entry, current_btn)
@@ -287,7 +305,7 @@ class DynamicList(ScrollableFrameBase):
             self.confirm_mode(current_entry,current_btn)
             self.callback_update_user_info("ADD_LIST",data)
             self.on_click_open_list(current_entry)
-            self.lists = [new_list if item == self.previous else item for item in self.lists]
+
 
 
     def edit_mode(self, current_entry, current_btn):
@@ -300,7 +318,6 @@ class DynamicList(ScrollableFrameBase):
         current_entry.focus()
         current_entry.bind('<Return>', lambda event: self.on_click_main_btn(current_entry, current_btn))
 
-
     def on_click_open_list(self,current_entry):
         if self.is_currently_editing:
             return
@@ -309,22 +326,27 @@ class DynamicList(ScrollableFrameBase):
 
     def on_click_delete_btn(self, current_frame, current_entry):
         current_state = current_entry.cget("state")
-        # Dont let user delete other frames while editing or delete while editing a current frame
-        # only delete a frame if its a new one or not currently editing
-        if (self.is_currently_editing and current_state == "disabled") or (not self.new and current_state == "normal"):
+        if self.is_currently_editing and current_state == "disabled" or self.animating:  # deleting another button while editing
             return
-        data = [current_entry.get().strip()]
-        if data != "" and not self.new:  # no reason to send delete on nothing or if new ingredient
-            self.callback_send_data("DELETE_LIST", data)
-            succeed = self.callback_receive_confirmation()
-            if succeed=="ok":
-                self.lists.remove(data[0])
-                self.destroy_frame(current_frame)
-                self.callback_close_list(data[0])
-                self.callback_update_user_info("DELETE_LIST",data)
-        else: #delete list that wasn't saved
-            self.new = False
+        if self.new_inner_frame:  # if not saved yet delete in client only
+            self.is_currently_editing = False
+            self.new_inner_frame = False
             self.destroy_frame(current_frame)
+            return
+        if current_state == "disabled":  # no reason to send delete on nothing or if new ingredient
+            data = [current_entry.get().strip()]
+        else: #delete list that wasn't saved
+            data = [self.previous]
+        self.callback_send_data("DELETE_LIST", data)
+        succeed = self.callback_receive_confirmation()
+        if succeed == "ok":
+            write_to_log("entered")
+            self.destroy_frame(current_frame)
+            self.callback_close_list(data[0])
+            self.callback_update_user_info("DELETE_LIST", data)
+            self.callback_destroy_specific_frame()
+
+
 
 class DraggableFrame(CTkFrame):
     def __init__(self,home_window,width=300,height=300,**kwargs):
@@ -362,6 +384,7 @@ class DraggableFrame(CTkFrame):
         if not self._specific_frame_drag_scheduled:
             self._specific_frame_drag_scheduled = True
             self.after(3, _do_drag, x, y)
+
 
 
 

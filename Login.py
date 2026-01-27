@@ -5,11 +5,10 @@ from PIL import ImageSequence
 
 # class for signin will add switching frame inside register, home button and backtoreg btn
 class SignIn:
-    def __init__(self, container, home,disconnected_home, client_statue, callback_signin , callback_register):
+    def __init__(self, container,disconnected_home, client_statue, callback_signin , callback_register):
         self._container = container
-        self._home_window = home
         self._disconnected_home=disconnected_home
-        self._client_statue = client_statue
+        self._client_status : list = client_statue
         self._username = None
         self._password = None
         self._signin_window = None
@@ -19,7 +18,6 @@ class SignIn:
         self._login_text = None
         self._username_text = None
         self._password_text = None
-        self._confirm_password_text = None
         self._btn_login = None
         self._login_massage = None
         self._btn_password_visible = None
@@ -80,7 +78,7 @@ class SignIn:
         if self._register is not None:
             self._register.initiate_existing_ui()
         else:
-            self._register = Register(self._container, self._disconnected_home, self._client_statue,self.callback_client_register, self.initiate_existing_ui)
+            self._register = Register(self._container, self._disconnected_home, self._client_status, self.callback_client_register, self.initiate_existing_ui)
             self._register.create_ui()
 
 
@@ -99,7 +97,7 @@ class SignIn:
 
     #add a forget function instead
     def forget_window(self):
-        return  self._signin_window.pack_forget()
+        self._signin_window.pack_forget()
 
     def get_register(self):
         return self._register
@@ -117,21 +115,18 @@ class SignIn:
             
     def on_click_signin(self):
         self._username = self._username_entry.get().strip()
-        if "'" in self._username or '"' in self._username or "-" in self._username or "1" in self._username:
-            self.extra_cybersecurity_measures()
-        else:
-            self._password = self._password_entry.get()
-            success = self.check_sign_in()
-            if success:
-                data = {
-                    "name": self._username,
-                    "password": self._password
-                }
-                self.callback_client_signin(data)
+        self._password = self._password_entry.get()
+        success = self.check_sign_in()
+        if success:
+            data = {
+                "name": self._username,
+                "password": self._password
+            }
+            self.callback_client_signin(data)
 
 
     def check_sign_in(self):
-            if not self._client_statue.connected:
+            if not self._client_status[0]:
                 self.show_massage("Please first connect to the server")
                 return False
             #because these are the username and password rules I should return false instead of waiting for server response
@@ -140,6 +135,10 @@ class SignIn:
                 return False
             else:
                 return True
+
+    def reset_info(self):
+        self._username=""
+        self._password=""
 
     def show_massage(self,msg):
         self._login_massage.configure(text=msg, text_color="red")
@@ -174,7 +173,7 @@ class Register:
     def __init__(self,container,disconnected_home,client_statue,callback_client_register,callback_signin_ui):
         self._container=container
         self._disconnected_home_window=disconnected_home
-        self._client_statue=client_statue
+        self._client_status=client_statue
         self._username=None
         self._password=None
         self._confirm_password=None
@@ -247,6 +246,10 @@ class Register:
         self._register_window.pack_forget()
         self._disconnected_home_window.pack(fill="both", expand=True)
 
+    def reset_info(self):
+        self._password=""
+        self._username=""
+        self._confirm_password=""
     #go back to sign in from register
     def on_click_signin(self):
         self._register_window.pack_forget()
@@ -299,7 +302,7 @@ class Register:
     def check_register(self)->bool:
         if not self._login_massage:
             self._login_massage = CTkLabel(master=self._register_window, text_color="red")
-        if not self._client_statue.connected:
+        if not self._client_status[0]:
             self.print_massage("Please first connect to the server")
             return False
         elif self._confirm_password!=self._password:

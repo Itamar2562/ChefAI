@@ -1,32 +1,36 @@
 from Protocol import *
 import queue
 
-class ClientStatue:
-    def __init__(self):
-        self.connected=False
-        self.signed_in=False
+# class ClientStatue:
+#     def __init__(self):
+#         self.connected=False
+#         self.signed_in=False
 
 class ClientBL:
     def __init__(self,ip,port):
         self.ip = ip
         self.port = port
-        self.parameters={'time':10.0,'type':"", 'preference':[]}
+        self.parameters={'time':10.0,'type':"", 'preference':[],'difficulty':""}
         self.client_socket=None
         self.fernet=None
         self.user_data={}
     def reset_parameters(self,time_slider):
-        self.parameters['time']=10.0
+        self.parameters['time']=60.0
         self.parameters['type']=""
+        self.parameters['difficulty']=""
         self.parameters['preference'].clear()
 
-    def add_food_type_parameters(self,parameter):
+    def add_food_type_parameter(self,parameter):
         self.parameters['type']=parameter
+
+    def add_difficulty_parameter(self,parameter):
+        self.parameters['difficulty']=parameter
 
     def add_preference_parameters(self,parameter):
         self.parameters['preference'].append(parameter)
 
-    def get_parameters(self,time):
-        self.parameters['time']=time
+    def get_parameters(self,curr_time):
+        self.parameters['time']=curr_time
         return self.parameters
 
     def connect(self):
@@ -80,7 +84,6 @@ class ClientBL:
             return False
 
     def update_user_info(self, cmd, args):
-        write_to_log(self.user_data)
         if cmd == "ADD":
             list_name=args[0]
             prev = args[1]
@@ -90,7 +93,7 @@ class ClientBL:
                 self.user_data[ list_name].append(curr)
             else:
                 self.user_data[list_name].append(curr)
-        if cmd == "ADD_LIST":
+        elif cmd == "ADD_LIST":
             prev_name = args[0]
             curr_name = args[1]
             if prev_name in self.user_data.keys():
@@ -102,6 +105,9 @@ class ClientBL:
             list_name=args[0]
             curr = args[1]
             self.user_data[list_name].remove(curr)
+        elif cmd=="DELETE_ALL":
+            list_name=args[0]
+            self.user_data[list_name]=[]
         elif cmd == "DELETE_LIST":
             curr=args[0]
             del self.user_data[curr]
@@ -111,7 +117,6 @@ class ClientBL:
             ingredient=args[2]
             self.user_data[src_list].remove(ingredient)
             self.user_data[dst_list].append(ingredient)
-        write_to_log(self.user_data)
 
 
 
@@ -123,6 +128,7 @@ class ClientBL:
             cmd, msg=receive_msg(self.client_socket)
             if self.fernet:
                 msg=self.decrypt(msg).decode()
+        #write_to_log(msg)
         return msg
 
 
