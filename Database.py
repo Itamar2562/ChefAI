@@ -1,6 +1,9 @@
 import sqlite3
 import json
 import hashlib
+from cgitb import reset
+from http.client import responses
+
 from Protocol import write_to_log
 DB_NAME = "Database.db"
 TABLE_USERS = "Users"
@@ -16,7 +19,7 @@ def get_conn():
 
 
 
-def create_response_msg_db(cmd: str,username,password) ->str:
+def create_response_msg_db(cmd: str,username,password,default_items=0) ->str:
     conn= get_conn()
     write_to_log(conn)
     cursor=conn.cursor()
@@ -60,7 +63,7 @@ def create_response_msg_db(cmd: str,username,password) ->str:
         if cmd=="SIGNIN":
            response=sign_in(conn,username,password)
         elif cmd=="REG":
-           response=register(conn,username,password)
+           response=register(conn,username,password,default_items)
         return response
     except Exception as E:
         write_to_log(f"database Error {E}")
@@ -79,9 +82,14 @@ def sign_in(conn,username,password):
         response = "Wrong username or password"
     return response
 
-def register(conn,username,password):
+def register(conn,username,password,default_items):
+    write_to_log("got here")
     cursor=conn.cursor()
     try:
+        if user_exists(conn,username,password):
+            write_to_log(f"exists")
+            response="Username already taken"
+            return response
         # Insert data record
         cursor.execute('''INSERT INTO users(username, password) VALUES(?,?)''', (username, password))
         user_id = cursor.lastrowid
@@ -89,21 +97,35 @@ def register(conn,username,password):
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 1)",
             (user_id, "Main")
         )
+        if default_items==1:
+            put_default_lists(conn,user_id)
         # confirm and save data to DB
         conn.commit()
         response = "saved to database"
         return response
     except Exception as E:
-        if str(E) == "UNIQUE constraint failed: users.username":
-            response = f"Username taken"
-        else:
-            response = f"Error {E}"
-            conn.rollback()
+        write_to_log(f"error {E}")
+        response = f"Error {E}"
+        conn.rollback()
         return response
 
-def put_default_lists(user_id):
-    write_to_log(user_id)
-    conn=get_conn()
+
+def user_exists(conn,username,password) -> bool:
+    cursor=conn.cursor()
+    """
+    Checks if a user with the given username exists in the 'users' table.
+    """
+    # Use a placeholder '?' to safely pass the username parameter
+    query = 'SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND password = ?)'
+    cursor.execute(query, (username,password))
+
+    # Fetch the result (a single row with one value: 0 or 1)
+    # fetchone() returns a tuple, e.g., (1,) or (0,)
+    result = cursor.fetchone()[0]
+    return result == 1
+
+def put_default_lists(conn,user_id):
+    write_to_log(f"userod {user_id}")
     cursor=conn.cursor()
     for list_name in DEFAULT_LISTS:
         cursor.execute(
@@ -112,13 +134,6 @@ def put_default_lists(user_id):
     conn.commit()
     return True
 
-
-#def generate_key() -> bytes:
- #   return Fernet.generate_key()
-
-def save_client_data(client_data):
-    # Here should be code to save data to DB
-    print("Client data saved:", client_data)
 
 def hash_password(password):
     return str(hashlib.sha256(password.encode('utf-8')).hexdigest())

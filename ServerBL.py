@@ -106,10 +106,10 @@ class ClientHandler(threading.Thread):
         password=data['password']
         write_to_log(username)
         write_to_log(password)
-        msg = create_response_msg_db(cmd, username,password)
-        curr_id=get_id(username,password)
-        if cmd=="REG" and data['default']==1:
-            put_default_lists(curr_id)
+        if cmd=="REG":
+            msg = create_response_msg_db(cmd, username,password,data['default'])
+        else:
+            msg=create_response_msg_db(cmd, username,password)
         write_to_log(f"msg is {msg}")
         self.send_data("LOGIN",msg)
         if msg == "connected":

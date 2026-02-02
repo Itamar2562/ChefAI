@@ -98,7 +98,7 @@ class Recipes:
             nutrition_btn.place(x=670,y=50)
             cook_btn.place(x=520,y=50)
             headline.place(x=5,y=5)
-            description.place(x=5,y=55)
+            description.place(x=5,y=35)
             difficulty_and_time.place(x=580,y=15)
             current_frame.pack(pady=10, padx=2, fill="x",)
             time.sleep(0.05)
