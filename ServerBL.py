@@ -107,13 +107,15 @@ class ClientHandler(threading.Thread):
         write_to_log(username)
         write_to_log(password)
         if cmd=="REG":
-            msg = create_response_msg_db(cmd, username,password,data['default'])
+            code,msg = create_response_msg_db(cmd, username,password,data['default'])
         else:
-            msg=create_response_msg_db(cmd, username,password)
+            code,msg=create_response_msg_db(cmd, username,password)
         write_to_log(f"msg is {msg}")
-        self.send_data("LOGIN",msg)
-        if msg == "connected":
-            self.initiate_sign_in(username,password)
+        response=self.create_response_dict(code,msg)
+        if code == "200":
+            data=self.get_user_info(username,password)
+            response["data"]=data
+        self.send_data("LOGIN",response)
 
     def handle_ingredients(self,cmd,data):
         write_to_log("got here maybe")
@@ -143,26 +145,19 @@ class ClientHandler(threading.Thread):
         ingredients=self.extract_all_ingredients(data)
         ingredients=json.dumps(ingredients)
         #in client receive create a receive loop getting it one by one
-        if len(parameters['type'])==0:
-            ai_response=send_and_receive_ai_request(parameters['time'],"general",parameters['difficulty'],parameters['preference'], ingredients)
-            write_to_log(ai_response)
-            self.send_data("AI",ai_response)
-        else:
-            ai_response=send_and_receive_ai_request(parameters['time'],parameters['type'],parameters['difficulty'],parameters['preference'], ingredients)
-            write_to_log(ai_response)
-            self.send_data("AI",ai_response)
+        ai_response=send_and_receive_ai_request(parameters['time'],parameters['type'],parameters['difficulty'],parameters['preference'], ingredients)
+        ai_response=process_for_json_loads(ai_response)
+        write_to_log(ai_response)
+        self.send_data("AI",ai_response)
 
     def extract_all_ingredients(self,data):
-        write_to_log(data)
         ingredients=[]
         for key in data.keys():
             for ing in data[key]:
                 ingredients.append(ing)
-        write_to_log(ingredients)
         return ingredients
 
     def handle_list(self,cmd,data):
-        write_to_log("got here maybe")
         if cmd == "LIST":
             response = self.add_list_to_db(data)
             self.send_data("ADD", response)
@@ -201,8 +196,8 @@ class ClientHandler(threading.Thread):
         except:
             return False
 
-    def create_response_dict(self,code,item,ingredient_list=""):
-        response= {"code": code, "item": item, "list": ingredient_list}
+    def create_response_dict(self,code,massage):
+        response= {"code": code, "massage":massage}
         return response
 
     def add_ingredient_to_db(self,ingredient):
@@ -211,24 +206,25 @@ class ClientHandler(threading.Thread):
         prev_name = ingredient[1]
         curr_name = ingredient[2]
         code = handle_ingredient_update(self._current_id, list_name,prev_name, curr_name)
-        response=self.create_response_dict(code,curr_name,list_name)
+        massage={"Operation":"add","ingredient":ingredient,"list":list_name}
+        response=self.create_response_dict(code,massage)
         return  response
 
     def add_list_to_db(self,curr_list):
         curr_list=json.loads(curr_list)
         code = handle_db_list_update(self._current_id,curr_list)
-        response=self.create_response_dict(code,curr_list)
+        massage={"Operation":"add","list":curr_list}
+        response=self.create_response_dict(code,massage)
         return response
 
 
     def remove_ingredient_from_db(self,data):
         data=json.loads(data)
-        write_to_log(data[0])
-        write_to_log(data[1])
         list_name: str = data[0]
         ingredient_name: str = data[1]
         code=delete_ingredient(self._current_id,list_name,ingredient_name)
-        response=self.create_response_dict(code,ingredient_name,list_name)
+        massage={"Operation":"delete","ingredient":ingredient_name,"list":list_name}
+        response=self.create_response_dict(code,massage)
         return response
 
 
@@ -238,29 +234,29 @@ class ClientHandler(threading.Thread):
         dst_list = data[1]
         ingredient = data[2]
         code=transfer_ingredient(self._current_id,src_list,dst_list,ingredient)
-        response=self.create_response_dict(code,ingredient,dst_list)
+        massage={"Operation":"transfer","ingredient":ingredient,"source":src_list,"destination": dst_list}
+        response=self.create_response_dict(code,massage)
         return response
 
     def remove_all_ingredients_from_db(self,data):
         data=json.loads(data)
         list_name=data[0]
-        write_to_log(list_name)
         code=remove_all_ingredients(self._current_id,list_name)
-        response=self.create_response_dict(code,list_name)
+        massage={"Operation":"delete_all","list":list_name}
+        response=self.create_response_dict(code,massage)
         return response
 
     def remove_list_from_db(self,curr_list):
         curr_list=json.loads(curr_list)[0]
         code=delete_list(self._current_id,curr_list)
-        response=self.create_response_dict(code,curr_list)
+        massage={"Operation":"delete_list","list":curr_list}
+        response=self.create_response_dict(code,massage)
         return response
 
-    def initiate_sign_in(self,username,password):
+    def get_user_info(self,username,password):
         self._current_id = get_id(username,password)
-        write_to_log(f" id is{self._current_id}")
         data=get_lists_with_ingredients(self._current_id)
-        write_to_log(data)
-        self.send_data("Ingredients",data)
+        return data
 
     def send_data(self,cmd,args,verbose=True):
         try:

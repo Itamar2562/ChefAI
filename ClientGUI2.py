@@ -1,12 +1,12 @@
+import threading
+import time
+
 from ClientBL import *
 from WidgetUtils import Ingredients, DraggableFrame
 from Login import SignIn
 from Recipes import Recipes
 from Refrigerator import Refrigerator
 
-BG_IMAGE = "./Images/GUI - BG.png"
-BTN_IMAGE="./Images/GUI - button.png"
-BTN_Make_IMAGE="./Images/GUI - button_make.png"
 FONT="Calibri"
 FONT_BUTTON=(FONT,16)
 SMALL_FONT_BUTTON=(FONT,12)
@@ -48,6 +48,13 @@ class ClientGUI:
         self._sign_in = None
         self._register=None
 
+        self._error_frame=None
+        self._error_icon=CTkImage(Image.open(r"Images/ErrorIcon.png"),size=(30,30))
+        self._schedule_hide_error_frame=None
+        self._error_text=None
+        self._error_icon_label=None
+
+        self._schedule_categorize_list_frame=None
 
         self._ingredients=None
 
@@ -63,7 +70,7 @@ class ClientGUI:
         self._connection.start()
 
         self._connection_status=[False]
-        self._specific_frame=None
+        self._categorize_lists_frame=None
         self.create_ui()
 
     def create_ui(self):
@@ -143,7 +150,7 @@ class ClientGUI:
                                   hover_color="#4185D0",  height=30,width=80,command=self.on_click_halal)
         self._btn_halal.place(x=215, y=485,anchor='center')
         self._btn_kosher=CTkButton(master=self._home,text="Kosher", font=SMALL_FONT_BUTTON,fg_color="#C850C0",
-                                   hover_color="#4185D0",height=30,width=80,command=self.on_click_kosher)
+                                   hover_color="#4185D0",height=30,width=80,command= self.on_click_kosher)
         self._btn_kosher.place(x=215, y=450,anchor='center')
 
         self._food_types=CTkOptionMenu(master=self._home,values=["general","salad","dessert","sandwich","fried","soup","Grilled","baked"])
@@ -193,12 +200,16 @@ class ClientGUI:
         try:
             self.reset_frames()
             self.forget_all_frames()
-            self.on_click_destroy_specific_frame()
-            self._not_logged_in_home.pack(fill="both",expand=True)
+            self.destroy_categorize_lists_frame()
+            self.destroy_error_frame()
+            if self._error_frame:
+                self._home.after(0, self._error_frame.destroy)
+                self._error_frame=None
             self.on_click_reset()
             self.update_default_greeting()
             self._username = ""
             self._client_bl.user_data={}
+            self._not_logged_in_home.pack(fill="both",expand=True)
         except Exception as e: #remove again
             write_to_log(e)
             pass
@@ -222,13 +233,12 @@ class ClientGUI:
                 child.pack_forget()
 
     def on_click_refrigerator(self):
-        self.on_click_destroy_specific_frame()
+        self.destroy_categorize_lists_frame()
         def send_ingredient(cmd, data):
             self._client_bl.send_data(cmd, data)
         def receive_confirmation():
-            msg = self._client_bl.receive_msg()
-            msg=json.loads(msg)
-            return Codes[msg["code"]]
+            msg = self._client_bl.receive_msg(need_json=True)
+            return msg
         self._home.pack_forget()
         if not self._refrigerator:
             self._refrigerator=Refrigerator(self._container,self.initiate_existing_home,send_ingredient,receive_confirmation,self._client_bl.update_user_info,self._client_bl.user_data)
@@ -239,65 +249,123 @@ class ClientGUI:
     def initiate_existing_home(self):
         self._ingredients.clear_frames()
         self._home.pack(fill="both",expand=True)
-        self.initiate_first_ingredients()
+        t=threading.Thread(target=lambda:self._ingredients.initiate_first_ingredients(self._client_bl.user_data))
+        t.start()
 
-    def on_click_categorize(self,ingredient,ingredient_frame):
-        self.on_click_destroy_specific_frame()
-        self._specific_frame = DraggableFrame(self._home)
-        self._specific_frame.place(x=350,y=55)
-        scrollable_frame=CTkScrollableFrame(master=self._specific_frame,width=250,height=320,corner_radius=15
-                                            ,border_color="blue",border_width=3)
+
+    def on_click_categorize(self, ingredient, ingredient_frame):
+        self.destroy_categorize_lists_frame()
+        if not self._categorize_lists_frame:
+            self._categorize_lists_frame = CTkFrame(self._home)
+        self._categorize_lists_frame.place(x=350, y=55)
+        self._categorize_lists_frame.lift()
+        scrollable_frame = CTkScrollableFrame(master=self._categorize_lists_frame, width=250, height=320,
+                                              corner_radius=15
+                                              , border_color="blue", border_width=3)
         scrollable_frame.pack()
-        ingredient_name = CTkLabel(master=scrollable_frame, text=ingredient, font=("Calibri", 30, "bold","underline"),wraplength=150)
+        ingredient_name = CTkLabel(master=scrollable_frame, text=ingredient, font=("Calibri", 30, "bold", "underline"),
+                                   wraplength=150)
         ingredient_name.pack(padx=(0, 100), pady=2)
-        btn_back = CTkButton(scrollable_frame, text="Back", height=30, width=80, text_color="white",hover_color="#4185D0",
-                             font=("Calibri", 17), fg_color="#C850C0",command=self.forget_specific_frame)
+        btn_back = CTkButton(scrollable_frame, text="Back", height=30, width=80, text_color="white",
+                             hover_color="#4185D0",
+                             font=("Calibri", 17), fg_color="#C850C0", command=self.forget_categorize_lists_frame)
         btn_back.place(relx=1.0, x=-10, y=5, anchor="ne")
+        t=threading.Thread(target=lambda: self.initiate_categorize_list_frame(scrollable_frame, ingredient, ingredient_frame))
+        t.start()
+
+    def initiate_categorize_list_frame(self, scrollable_frame, ingredient, ingredient_frame):
         try:
-            t=threading.Thread(target=lambda: self.initiate_list_frame(scrollable_frame,ingredient,ingredient_frame),daemon=True)
-            t.start()
-        except Exception as e: write_to_log(e)
-        self._specific_frame.bind_drag_widget(self._specific_frame)
-
-
-    def initiate_list_frame(self,scrollable_frame,ingredient,ingredient_frame):
-        self._ingredients.set_animating(True)
-        for i in self._client_bl.user_data.keys():
-            if i == "Main":
-                continue
-            current_frame = CTkFrame(master=scrollable_frame, width=80, height=40, corner_radius=28, fg_color="#5B5FD9")
-            current_frame.pack(pady=3, padx=5, fill="x", anchor='w', )
-            current_entry = CTkEntry(master=current_frame)
-            current_entry.place(x=5, y=7)
-            current_entry.insert(0, i)
-            current_entry.configure(state="disabled")
-            current_select_btn = CTkButton(master=current_frame, width=50, height=25, text="Select",
-                                           text_color="#5B5FD9",
-                                           fg_color="black", font=("Arial", 18),
-                                           command=lambda entry=current_entry,frame=ingredient_frame: self.on_click_select(ingredient, entry.get(),frame))
-            current_select_btn.place(x=150, y=7)
-        self._ingredients.set_animating(False)
-
+            def create_frames(i, data):
+                if i >= len(data):
+                    self.stop_animating()
+                    return
+                if data[i]!="Main":
+                    current_frame = CTkFrame(master=scrollable_frame, width=80, height=40, corner_radius=28,
+                                             fg_color="#5B5FD9")
+                    current_frame.pack(pady=3, padx=5, fill="x", anchor='w', )
+                    current_entry = CTkEntry(master=current_frame)
+                    current_entry.place(x=5, y=7)
+                    current_entry.insert(0, data[i])
+                    current_entry.configure(state="disabled")
+                    current_select_btn = CTkButton(master=current_frame, width=50, height=25, text="Select",
+                                                   text_color="#5B5FD9",
+                                                   fg_color="black", font=("Arial", 18),
+                                                   command=lambda entry=current_entry,
+                                                                  frame=ingredient_frame: self.on_click_select(
+                                                       ingredient, entry.get(), frame))
+                    current_select_btn.place(x=150, y=7)
+                self._schedule_categorize_list_frame = self._home.after(20,create_frames,i + 1,data)
+            self.start_animating()
+            list_client_data = list(self._client_bl.user_data.keys())
+            create_frames(0, list_client_data)
+        except Exception as e:  # error hereds
+            self.stop_animating()
+            write_to_log(e)
 
     def on_click_select(self,ingredient,dst_list,ingredient_frame):
         cmd="TRANSFER"
         args=["Main",dst_list,ingredient]
         self._client_bl.send_data(cmd,args)
-        msg = self._client_bl.receive_msg()
-        msg = json.loads(msg)
-        if Codes[msg["code"]]=="ok":
-            self.forget_specific_frame()
+        msg = self._client_bl.receive_msg(need_json=True)
+        self.forget_categorize_lists_frame()
+        if msg["code"]=="200":
             ingredient_frame.destroy()
             self._client_bl.update_user_info(cmd,args)
+        else:
+            self.create_error_specific_frame(ingredient,dst_list,msg["code"])
 
+    #create a new specific frame different oney
+    def create_error_specific_frame(self,ingredient,dst_list,code):
+        def _hide():
+            self._schedule_hide_error_frame=None
+            self._error_frame.place_forget()
+        if not self._error_frame:
+            self._error_frame = CTkFrame(self._home, fg_color="#3b0d0d", border_color="#ff4d4d", border_width=2,corner_radius=12)
+            self._error_icon_label = CTkLabel(master=self._error_frame, text="", image=self._error_icon)
+            self._error_text = CTkLabel(master=self._error_frame,
+                                        font=("Segoe UI", 20, "bold"))
+        self._error_frame.place(x=325, y=200)
+        self._error_frame.lift()
+        self._error_icon_label.pack(side="left",padx=5,pady=20)
+        if code=="409":
+            text=f"Ingredient: {ingredient} already in list: {dst_list}"
+        else:
+            text=f"Server error with ingredient: {ingredient} and list: {dst_list}"
+        self._error_text.configure(text=text)
+        self._error_text.pack(side="left",padx=5,pady=20)
+        if self._schedule_hide_error_frame is not None:
+            self._home.after_cancel(self._schedule_hide_error_frame)
+        self._schedule_hide_error_frame = self._home.after(1200, _hide)
 
-    def on_click_destroy_specific_frame(self):
-        if self._specific_frame:
-            self._specific_frame.after(0, self._specific_frame.destroy)
-            self._specific_frame = None
-    def forget_specific_frame(self):
-        if self._specific_frame:
-            self._specific_frame.after(0,self._specific_frame.place_forget)
+    def start_animating(self):
+        if self._schedule_categorize_list_frame:
+            self._home.after_cancel(self._schedule_categorize_list_frame)
+            self._schedule_categorize_list_frame=None
+        self._ingredients.set_animating(True)
+    def stop_animating(self):
+        self._ingredients.set_animating(False)
+        if self._schedule_categorize_list_frame:
+            self._home.after_cancel(self._schedule_categorize_list_frame)
+            self._schedule_categorize_list_frame = None
+
+    def destroy_categorize_lists_frame(self):
+        self.stop_animating()
+        if self._categorize_lists_frame and self._categorize_lists_frame.winfo_exists():
+            self._categorize_lists_frame.destroy()
+            self._categorize_lists_frame = None
+
+    def forget_categorize_lists_frame(self):
+        self.stop_animating()
+        if self._categorize_lists_frame:
+            self._home.after(0, self._categorize_lists_frame.place_forget)
+            self.update_buttons("normal")
+
+    def destroy_error_frame(self):
+        if self._error_frame:
+            self._home.after(0,self._error_frame.destroy)
+            self._error_frame=None
+            self._schedule_hide_error_frame=None
+
 
     def on_click_make(self):
         #only send data if client is connected maybe simply make btn disabled for furture
@@ -306,7 +374,8 @@ class ClientGUI:
         cmd="MAKE"
         args=self._client_bl.get_parameters(self._time_slider.get())
         self._client_bl.send_data(cmd,args)
-        self.on_click_destroy_specific_frame()
+        self.destroy_error_frame()
+        self.destroy_categorize_lists_frame()
         self._home.pack_forget()
         self._recipes=Recipes(self._container,self._home,self._connection_status,self._client_bl.receive_msg)
         self._recipes.create_ui()
@@ -315,9 +384,10 @@ class ClientGUI:
         def on_click_sign_in(data):
             cmd="SIGNIN"
             self._client_bl.send_data(cmd,data)
-            msg=self._client_bl.receive_msg()
-            self._sign_in.show_massage(msg)
-            if msg == "connected":
+            msg=self._client_bl.receive_msg(need_json=True)
+            self._sign_in.show_massage(msg["massage"])
+            if msg["code"] == "200":
+                self._client_bl.user_data=msg["data"]
                 self._username=self._sign_in.get_username()
                 self._sign_in.forget_window()
                 self._home.pack(fill="both", expand=True)
@@ -326,8 +396,8 @@ class ClientGUI:
             self._register = self._sign_in.get_register()
             cmd="REG"
             self._client_bl.send_data(cmd,data)
-            msg = self._client_bl.receive_msg()
-            self._register.print_massage(msg)
+            msg = self._client_bl.receive_msg(need_json=True)
+            self._register.print_massage(msg["massage"])
             #maybe create another thread that process receiving data
             #it gets data and cmd from server
             #now I just check it manually
@@ -346,7 +416,8 @@ class ClientGUI:
         self._client_bl.send_data("SIGN_OUT","")
 
     def update_refrigerator_state(self,state):
-        self._btn_refrigerator.after(100, lambda: self._btn_refrigerator.configure(state=state,image=self._btn_refrigerator.cget("image"),fg_color= self._btn_refrigerator.cget("fg_color")))
+        self._home.after(100,lambda: self._btn_refrigerator.configure(state=state,image=self._btn_refrigerator.cget("image"),fg_color= self._btn_refrigerator.cget("fg_color"))
+)
         if state == "disabled":
             self._btn_refrigerator.unbind('<Motion>')
         else:
@@ -355,54 +426,46 @@ class ClientGUI:
         self._btn_refrigerator.event_generate("<Motion>")
 
 
+
+    def update_buttons(self,state):
+        self._btn_add.configure(state=state)
+        self._btn_make.configure(state=state)
+        self._btn_clear.configure(state=state)
+        self.update_refrigerator_state(state)
+        self._home.update_idletasks()
+
     def initiate_signed_in(self):
         self._home.pack(fill="both",expand=True)
-        def send_ingredient(cmd,data):
-            self._client_bl.send_data(cmd,data)
         def receive_confirmation():
-            msg = self._client_bl.receive_msg()
-            msg=json.loads(msg)
-            return Codes[msg["code"]]
-        def update_buttons(state,update_back=False):
-            self._btn_add.configure(state=state)
-            self._btn_make.configure(state=state)
-            self._btn_clear.configure(state=state)
-            self.update_refrigerator_state(state)
+            msg = self._client_bl.receive_msg(need_json=True)
+            data=msg["massage"]
+            if msg["code"]=="409" or msg["code"]=="500":
+                self.create_error_specific_frame(data["ingredient"][2],data["list"],msg["code"])
+            return msg["code"]
+
 
         if not self._ingredients:
-            self._ingredients = Ingredients("Main", self._home, send_ingredient, receive_confirmation,
-                                            update_buttons, self.on_click_categorize, self._client_bl.update_user_info,
-                                            self.on_click_destroy_specific_frame, width=270, height=300,
+            self._ingredients = Ingredients("Main", self._home, self._client_bl.send_data, receive_confirmation,
+                                            self.update_buttons, self.on_click_categorize, self._client_bl.update_user_info,
+                                            self.destroy_categorize_lists_frame,None, width=270, height=300,
                                             fg_color="#1E1E2E", border_width=2, border_color="#3A3F8F")
             self._ingredients.set_internal_frame_look(width=80, height=40, corner_radius=28, fg_color="#5B5FD9")
             self._ingredients.place(x=5, y=100)
-        self._btn_add.configure(state='disabled')
-        self._btn_clear.configure(state='disabled')
-        self.receive_user_data()
-        self.initiate_first_ingredients()
-
         self.update_greeting()
         self.on_click_reset()
+        t = threading.Thread(target=lambda: self._ingredients.initiate_first_ingredients(self._client_bl.user_data))
+        t.start()
 
-    def receive_user_data(self):
-        data=self._client_bl.receive_msg()
-        data=json.loads(data)
-        self._client_bl.user_data=data
 
     def on_click_delete_all_btn(self):
         args=["Main"]
         self._client_bl.send_data("DELETE_ALL", args)
-        msg=json.loads(self._client_bl.receive_msg())
-        write_to_log(msg)
+        msg=self._client_bl.receive_msg(need_json=True)
         if msg['code']=="200":
             self._ingredients.clear_frames()
-            self.forget_specific_frame()
+            self.destroy_categorize_lists_frame()
             self._btn_add.configure(state="normal")
             self._client_bl.update_user_info("DELETE_ALL",args)
-
-    def initiate_first_ingredients(self):
-        t = threading.Thread(target=lambda: self._ingredients.initiate_first_ingredients(self._client_bl.user_data), daemon=True)
-        t.start()
 
     #do a function of update_greeting instead (it will update auto not return str)
     def update_greeting(self):
@@ -424,7 +487,7 @@ class ClientGUI:
         self._food_types.set('general')
         self._difficulties.set('all')
         self._cooking_time.configure(text="Cooking time: 60.0min")
-        self._client_bl.reset_parameters(self._time_slider)
+        self._client_bl.reset_parameters()
 
     def on_click_vegetarian(self):
         self._btn_vegetarian.configure(state="disabled")

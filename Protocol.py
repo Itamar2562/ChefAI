@@ -10,7 +10,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.fernet import Fernet
 import json
 from PIL import Image
-
+import re
+import fpdf
 
 SERVER_IP="0.0.0.0"
 CLIENT_IP="127.0.0.1"
@@ -53,6 +54,23 @@ def write_to_log(msg):
     logging.info(msg)
     print(msg)
 
+def process_for_json_loads(text: str):
+    # Remove code fences if present
+    text = text.strip()
+
+    # Try direct parse first (fast path)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Regex to extract first JSON array or object
+    match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
+    if not match:
+        raise ValueError("No valid JSON found in AI response")
+
+    return json.loads(match.group(1))
+
 #gets the message with header and extracts the msg
 #returns error if the msg isn't with a valid header
 def receive_bytes_msg(current_socket:socket):
@@ -79,6 +97,13 @@ def receive_msg(current_socket:socket):
         msg += current_socket.recv(msg_header - len(msg)).decode()
     return cmd, msg
 
+def save_to_pdf(data):
+    pdf = fpdf.FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", style="B", size=16)
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(w=0, h=10, txt=data['data'], align='J')
+    pdf.output(f"{data['name']}.pdf")
 
 #recives cmd and args(list) from client and turns them into
 #header_cmd_header_args
@@ -96,7 +121,6 @@ def encode_data(data):
         return data
     if isinstance(data, str):
         data = data.encode()
-
     else:
         data = json.dumps(data).encode()  # turn the json args into string
     return data

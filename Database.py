@@ -1,8 +1,5 @@
 import sqlite3
-import json
 import hashlib
-from cgitb import reset
-from http.client import responses
 
 from Protocol import write_to_log
 DB_NAME = "Database.db"
@@ -19,7 +16,7 @@ def get_conn():
 
 
 
-def create_response_msg_db(cmd: str,username,password,default_items=0) ->str:
+def create_response_msg_db(cmd: str,username,password,default_items=0):
     conn= get_conn()
     write_to_log(conn)
     cursor=conn.cursor()
@@ -67,7 +64,7 @@ def create_response_msg_db(cmd: str,username,password,default_items=0) ->str:
         return response
     except Exception as E:
         write_to_log(f"database Error {E}")
-        return f"Error"
+        return "500","Error"
 
 
 def sign_in(conn,username,password):
@@ -77,18 +74,18 @@ def sign_in(conn,username,password):
     cursor.execute(query, (username, password))
     result = cursor.fetchone()[0]
     if result == 1:
-        response = "connected"
+        response = "200","connected"
     else:
-        response = "Wrong username or password"
+        response = "401","Wrong username or password"
     return response
 
 def register(conn,username,password,default_items):
     write_to_log("got here")
     cursor=conn.cursor()
     try:
-        if user_exists(conn,username,password):
-            write_to_log(f"exists")
-            response="Username already taken"
+        if user_exists(conn,username):
+            write_to_log(f"user exists worked")
+            response="401","Username already taken"
             return response
         # Insert data record
         cursor.execute('''INSERT INTO users(username, password) VALUES(?,?)''', (username, password))
@@ -101,28 +98,28 @@ def register(conn,username,password,default_items):
             put_default_lists(conn,user_id)
         # confirm and save data to DB
         conn.commit()
-        response = "saved to database"
+        response = "201","saved to database"
         return response
     except Exception as E:
-        write_to_log(f"error {E}")
-        response = f"Error {E}"
+        write_to_log(f"yooo {E}")
+        response = "500","Error"
         conn.rollback()
         return response
 
 
-def user_exists(conn,username,password) -> bool:
-    cursor=conn.cursor()
-    """
-    Checks if a user with the given username exists in the 'users' table.
-    """
-    # Use a placeholder '?' to safely pass the username parameter
-    query = 'SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND password = ?)'
-    cursor.execute(query, (username,password))
 
-    # Fetch the result (a single row with one value: 0 or 1)
-    # fetchone() returns a tuple, e.g., (1,) or (0,)
-    result = cursor.fetchone()[0]
-    return result == 1
+def user_exists(conn,username):
+    write_to_log("got to exists")
+    cursor = conn.cursor()
+    # Prevent duplicate names
+    cursor.execute(
+        "SELECT id FROM users WHERE username=? ",
+        (username, )
+    )
+    if cursor.fetchone():
+        return True
+    return False
+
 
 def put_default_lists(conn,user_id):
     write_to_log(f"userod {user_id}")
@@ -167,21 +164,20 @@ def get_list_id_by_name(user_id, list_name):
     return row[0] if row else None
 
 def handle_ingredient_update(user_id,list_name,prev_name, curr_name):
-    write_to_log("got here 2213")
     list_id=get_list_id_by_name(user_id, list_name)
 
-    if not prev_name:
+    if  prev_name=="":
         return create_ingredient(list_id, curr_name)
 
     if prev_name != curr_name:
         return rename_ingredient(list_id, prev_name, curr_name)
-    return False
+    return "500"
 
 def create_ingredient(list_id, name):
     conn = get_conn()
     cursor = conn.cursor()
     try:
-        if ingredient_exists(list_id,name):
+        if ingredient_exists(conn,list_id,name):
             return "409"
         cursor.execute(
             """
@@ -202,7 +198,8 @@ def rename_ingredient(list_id, prev_name, new_name):
     cursor = conn.cursor()
     # block duplicate names in same list
     try:
-        ingredient_exists(list_id,prev_name)
+        if ingredient_exists(conn,list_id,new_name):
+            return "409"
         cursor.execute(
             """
             UPDATE ingredients
@@ -221,8 +218,7 @@ def rename_ingredient(list_id, prev_name, new_name):
         conn.rollback()
         return False
 
-def ingredient_exists(dst_list_id,ingredient):
-    conn = get_conn()
+def ingredient_exists(conn,dst_list_id,ingredient):
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -242,7 +238,7 @@ def transfer_ingredient(user_id,src_list,dst_list,ingredient):
         src_list_id=get_list_id_by_name(user_id,src_list)
         dst_list_id=get_list_id_by_name(user_id,dst_list)
         #check if ingredient in dst list
-        if ingredient_exists(dst_list_id,ingredient):
+        if ingredient_exists(conn,dst_list_id,ingredient):
             return "409"
         cursor.execute(
             """
@@ -276,7 +272,7 @@ def create_list(user_id, list_name):
     conn = get_conn()
     cursor = conn.cursor()
     try:
-        if list_exists(user_id,list_name):
+        if list_exists(conn,user_id,list_name):
            return "409"
         cursor.execute(
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
@@ -288,8 +284,7 @@ def create_list(user_id, list_name):
         conn.rollback()
         return "500"
 
-def list_exists(user_id,new_name):
-    conn = get_conn()
+def list_exists(conn,user_id,new_name):
     cursor = conn.cursor()
     # Prevent duplicate names
     cursor.execute(
@@ -304,7 +299,7 @@ def list_exists(user_id,new_name):
 def rename_list(user_id, prev_name, new_name):
     conn = get_conn()
     cursor = conn.cursor()
-    if list_exists(user_id,new_name):
+    if list_exists(conn,user_id,new_name):
         return "409"
     cursor.execute(
         """

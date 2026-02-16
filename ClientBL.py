@@ -1,5 +1,4 @@
 from Protocol import *
-import queue
 
 # class ClientStatue:
 #     def __init__(self):
@@ -10,13 +9,13 @@ class ClientBL:
     def __init__(self,ip,port):
         self.ip = ip
         self.port = port
-        self.parameters={'time':10.0,'type':"", 'preference':[],'difficulty':""}
+        self.parameters={'time':10.0,'type':"general", 'preference':[],'difficulty':""}
         self.client_socket=None
         self.fernet=None
         self.user_data={}
-    def reset_parameters(self,time_slider):
+    def reset_parameters(self):
         self.parameters['time']=60.0
-        self.parameters['type']=""
+        self.parameters['type']="general"
         self.parameters['difficulty']=""
         self.parameters['preference'].clear()
 
@@ -46,7 +45,7 @@ class ClientBL:
             return False
 
     def handle_first_handshake(self):
-        pem_public_key=self.receive_msg(True)
+        pem_public_key=self.receive_msg(need_bytes=True)
         public_key = serialization.load_pem_public_key(pem_public_key,backend=default_backend())
         session_key=Fernet.generate_key()
         encrypted_session_key = public_key.encrypt(session_key,padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
@@ -121,7 +120,7 @@ class ClientBL:
 
 
     #add a recieve queue instead
-    def receive_msg(self,need_bytes=False):
+    def receive_msg(self,need_bytes=False,need_json=False):
         if need_bytes:
             cmd, msg=receive_bytes_msg(self.client_socket)
         else:
@@ -129,6 +128,10 @@ class ClientBL:
             if self.fernet:
                 msg=self.decrypt(msg).decode()
         #write_to_log(msg)
+        if need_json:
+            write_to_log(type(msg))
+            write_to_log(msg)
+            return json.loads(msg)
         return msg
 
 
