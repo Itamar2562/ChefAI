@@ -12,6 +12,7 @@ import json
 from PIL import Image
 import re
 import fpdf
+import os
 
 SERVER_IP="0.0.0.0"
 CLIENT_IP="127.0.0.1"
@@ -98,12 +99,29 @@ def receive_msg(current_socket:socket):
     return cmd, msg
 
 def save_to_pdf(data):
-    pdf = fpdf.FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", style="B", size=16)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(w=0, h=10, txt=data['data'], align='J')
-    pdf.output(f"{data['name']}.pdf")
+    try:
+        os.makedirs("Saved Recipes", exist_ok=True)
+        if os.path.isfile(fr"Saved Recipes\{data['name']}.pdf"):
+            return "409" #already exists
+        pdf = fpdf.FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", style="B", size=16)
+        pdf.multi_cell(0, 10, data['name'], border=0,align="C")
+
+        pdf.set_font("Arial", size=12)
+        pdf.multi_cell(0, 10, data['data'], align='J')
+
+        pdf.set_font("Helvetica", style="B", size=16)
+        pdf.multi_cell(0, 10, 'Nutrition', border=0,align="C")
+
+        pdf.set_font("Arial", size=12)
+        pdf.multi_cell(0, 10, data['nutrition'], align='J')
+
+        pdf.output(fr"Saved Recipes\{data['name']}.pdf")
+        return "200"
+    except Exception as e:
+        write_to_log(f"Exception {e} while saving to pdf")
+        return "500"
 
 #recives cmd and args(list) from client and turns them into
 #header_cmd_header_args

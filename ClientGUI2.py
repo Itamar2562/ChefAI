@@ -1,6 +1,3 @@
-import threading
-import time
-
 from ClientBL import *
 from WidgetUtils import Ingredients, DraggableFrame
 from Login import SignIn
@@ -90,7 +87,7 @@ class ClientGUI:
         self._not_logged_in_home.pack(fill="both", expand=True)
 
         self._btn_login = CTkButton(master=self._not_logged_in_home, text="Login", font=("Calibri", 17),
-                                    fg_color="#C850C0", hover_color="#4185D0",
+                                    fg_color="#7C4CC2", hover_color="#6A3DB4",
                                     height=30, width=80,command=self.on_click_login)
         self._btn_login.place(x=915, y=10)
         #I will change greeting
@@ -137,20 +134,20 @@ class ClientGUI:
         self._cooking_time.place(x=502,y=440,anchor='center')
 
         #parameters buttons
-        self._btn_reset=CTkButton(master=self._home,text="Reset", font=SMALL_FONT_BUTTON, fg_color="#C850C0",
-                                  hover_color="#4185D0", height=30,width=80,command=self.on_click_reset)
+        self._btn_reset=CTkButton(master=self._home,text="Reset", font=SMALL_FONT_BUTTON, fg_color="#7C4CC2",
+                                  hover_color="#6A3DB4", height=30,width=80,command=self.on_click_reset)
         self._btn_reset.place(x=502,y=490,anchor='center')
-        self._btn_vegetarian=CTkButton(master=self._home,text="Vegetarian", font=SMALL_FONT_BUTTON, fg_color="#C850C0",
-                                       hover_color="#4185D0", height=30,width=80,command=self.on_click_vegetarian)
+        self._btn_vegetarian=CTkButton(master=self._home,text="Vegetarian", font=SMALL_FONT_BUTTON, fg_color="#7C4CC2",
+                                       hover_color="#6A3DB4", height=30,width=80,command=self.on_click_vegetarian)
         self._btn_vegetarian.place(x=300,y=485,anchor='center')
-        self._btn_vegan=CTkButton(master=self._home,text="Vegan", font=SMALL_FONT_BUTTON, fg_color="#C850C0",
-                                  hover_color="#4185D0", height=30,width=80,command=self.on_click_vegan)
+        self._btn_vegan=CTkButton(master=self._home,text="Vegan", font=SMALL_FONT_BUTTON, fg_color="#7C4CC2",
+                                  hover_color="#6A3DB4", height=30,width=80,command=self.on_click_vegan)
         self._btn_vegan.place(x=300, y=450,anchor='center')
-        self._btn_halal=CTkButton(master=self._home,text="Halal", font=SMALL_FONT_BUTTON, fg_color="#C850C0",
-                                  hover_color="#4185D0",  height=30,width=80,command=self.on_click_halal)
+        self._btn_halal=CTkButton(master=self._home,text="Halal", font=SMALL_FONT_BUTTON, fg_color="#7C4CC2",
+                                  hover_color="#6A3DB4",  height=30,width=80,command=self.on_click_halal)
         self._btn_halal.place(x=215, y=485,anchor='center')
-        self._btn_kosher=CTkButton(master=self._home,text="Kosher", font=SMALL_FONT_BUTTON,fg_color="#C850C0",
-                                   hover_color="#4185D0",height=30,width=80,command= self.on_click_kosher)
+        self._btn_kosher=CTkButton(master=self._home,text="Kosher", font=SMALL_FONT_BUTTON,fg_color="#7C4CC2",
+                                   hover_color="#6A3DB4",height=30,width=80,command= self.on_click_kosher)
         self._btn_kosher.place(x=215, y=450,anchor='center')
 
         self._food_types=CTkOptionMenu(master=self._home,values=["general","salad","dessert","sandwich","fried","soup","Grilled","baked"])
@@ -160,18 +157,18 @@ class ClientGUI:
         self._difficulties.place(x=85,y=450,anchor='center')
 
 
-        self._btn_add=CTkButton(master=self._home,text="Add",font=("Calibri",17), fg_color="#C850C0",
-                                hover_color="#4185D0", height=30, width=80, command=self.on_click_add)
+        self._btn_add=CTkButton(master=self._home,text="Add",font=("Calibri",17), fg_color="#7C4CC2",
+                                hover_color="#6A3DB4", height=30, width=80, command=self.on_click_add)
         self._btn_add.place(x=100,y=60)
-        self._btn_clear = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#C850C0",
-                                    hover_color="#4185D0", font=("Arial",17),command=self.on_click_delete_all_btn)
+        self._btn_clear = CTkButton(master=self._home, height=30, width=80, text="Clear", fg_color="#7C4CC2",
+                                    hover_color="#6A3DB4", font=("Arial",17),command=self.on_click_delete_all_btn)
         self._btn_clear.place(x=190,y=60)
 
         self._main_ingredients_label=CTkLabel(master=self._home,text="Main", font=('Calibri',30, "underline"))
         self._main_ingredients_label.place(x=15, y=52)
 
-        self._btn_sign_out = CTkButton(master=self._home, text="Sign out", font=("Calibri", 17), fg_color="#C850C0",
-                                       hover_color="#4185D0", height=30, width=80, command=self.on_click_sign_out)
+        self._btn_sign_out = CTkButton(master=self._home, text="Sign out", font=("Calibri", 17), fg_color="#7C4CC2",
+                                       hover_color="#6A3DB4", height=30, width=80, command=self.on_click_sign_out)
         self._btn_sign_out.place(x=915, y=10)
 
 #CREATE A GOOD ONE FUNCTION RECIEVE IN CLIENT_BL THAT CHECKS
@@ -200,11 +197,7 @@ class ClientGUI:
         try:
             self.reset_frames()
             self.forget_all_frames()
-            self.destroy_categorize_lists_frame()
-            self.destroy_error_frame()
-            if self._error_frame:
-                self._home.after(0, self._error_frame.destroy)
-                self._error_frame=None
+            self.destroy_specific_frames()
             self.on_click_reset()
             self.update_default_greeting()
             self._username = ""
@@ -233,7 +226,7 @@ class ClientGUI:
                 child.pack_forget()
 
     def on_click_refrigerator(self):
-        self.destroy_categorize_lists_frame()
+        self.destroy_specific_frames()
         def send_ingredient(cmd, data):
             self._client_bl.send_data(cmd, data)
         def receive_confirmation():
@@ -249,12 +242,14 @@ class ClientGUI:
     def initiate_existing_home(self):
         self._ingredients.clear_frames()
         self._home.pack(fill="both",expand=True)
-        t=threading.Thread(target=lambda:self._ingredients.initiate_first_ingredients(self._client_bl.user_data))
-        t.start()
+        self._home.update_idletasks()
+        self._home.after(300,self._ingredients.initiate_first_ingredients,self._client_bl.user_data)
+        # t=threading.Thread(target=lambda:self._ingredients.initiate_first_ingredients(self._client_bl.user_data))
+        # t.start()
 
 
     def on_click_categorize(self, ingredient, ingredient_frame):
-        self.destroy_categorize_lists_frame()
+        self.destroy_specific_frames()
         if not self._categorize_lists_frame:
             self._categorize_lists_frame = CTkFrame(self._home)
         self._categorize_lists_frame.place(x=350, y=55)
@@ -267,8 +262,8 @@ class ClientGUI:
                                    wraplength=150)
         ingredient_name.pack(padx=(0, 100), pady=2)
         btn_back = CTkButton(scrollable_frame, text="Back", height=30, width=80, text_color="white",
-                             hover_color="#4185D0",
-                             font=("Calibri", 17), fg_color="#C850C0", command=self.forget_categorize_lists_frame)
+                             hover_color="#6A3DB4",
+                             font=("Calibri", 17), fg_color="#7C4CC2", command=self.forget_categorize_lists_frame)
         btn_back.place(relx=1.0, x=-10, y=5, anchor="ne")
         t=threading.Thread(target=lambda: self.initiate_categorize_list_frame(scrollable_frame, ingredient, ingredient_frame))
         t.start()
@@ -318,7 +313,8 @@ class ClientGUI:
     def create_error_specific_frame(self,ingredient,dst_list,code):
         def _hide():
             self._schedule_hide_error_frame=None
-            self._error_frame.place_forget()
+            if self._error_frame:
+                self._error_frame.place_forget()
         if not self._error_frame:
             self._error_frame = CTkFrame(self._home, fg_color="#3b0d0d", border_color="#ff4d4d", border_width=2,corner_radius=12)
             self._error_icon_label = CTkLabel(master=self._error_frame, text="", image=self._error_icon)
@@ -348,23 +344,21 @@ class ClientGUI:
             self._home.after_cancel(self._schedule_categorize_list_frame)
             self._schedule_categorize_list_frame = None
 
-    def destroy_categorize_lists_frame(self):
+    def destroy_specific_frames(self):
         self.stop_animating()
         if self._categorize_lists_frame and self._categorize_lists_frame.winfo_exists():
             self._categorize_lists_frame.destroy()
             self._categorize_lists_frame = None
+        if self._error_frame:
+            self._home.after(0, self._error_frame.destroy)
+            self._error_frame = None
+            self._schedule_hide_error_frame = None
 
     def forget_categorize_lists_frame(self):
         self.stop_animating()
         if self._categorize_lists_frame:
             self._home.after(0, self._categorize_lists_frame.place_forget)
             self.update_buttons("normal")
-
-    def destroy_error_frame(self):
-        if self._error_frame:
-            self._home.after(0,self._error_frame.destroy)
-            self._error_frame=None
-            self._schedule_hide_error_frame=None
 
 
     def on_click_make(self):
@@ -374,8 +368,7 @@ class ClientGUI:
         cmd="MAKE"
         args=self._client_bl.get_parameters(self._time_slider.get())
         self._client_bl.send_data(cmd,args)
-        self.destroy_error_frame()
-        self.destroy_categorize_lists_frame()
+        self.destroy_specific_frames()
         self._home.pack_forget()
         self._recipes=Recipes(self._container,self._home,self._connection_status,self._client_bl.receive_msg)
         self._recipes.create_ui()
@@ -428,6 +421,7 @@ class ClientGUI:
 
 
     def update_buttons(self,state):
+        write_to_log("got here")
         self._btn_add.configure(state=state)
         self._btn_make.configure(state=state)
         self._btn_clear.configure(state=state)
@@ -447,14 +441,15 @@ class ClientGUI:
         if not self._ingredients:
             self._ingredients = Ingredients("Main", self._home, self._client_bl.send_data, receive_confirmation,
                                             self.update_buttons, self.on_click_categorize, self._client_bl.update_user_info,
-                                            self.destroy_categorize_lists_frame,None, width=270, height=300,
+                                            self.destroy_specific_frames, None, width=270, height=300,
                                             fg_color="#1E1E2E", border_width=2, border_color="#3A3F8F")
             self._ingredients.set_internal_frame_look(width=80, height=40, corner_radius=28, fg_color="#5B5FD9")
             self._ingredients.place(x=5, y=100)
         self.update_greeting()
         self.on_click_reset()
-        t = threading.Thread(target=lambda: self._ingredients.initiate_first_ingredients(self._client_bl.user_data))
-        t.start()
+        self._home.after(300, self._ingredients.initiate_first_ingredients,self._client_bl.user_data)
+        # t = threading.Thread(target=lambda: self._ingredients.initiate_first_ingredients(self._client_bl.user_data))
+        # t.start()
 
 
     def on_click_delete_all_btn(self):
@@ -463,7 +458,7 @@ class ClientGUI:
         msg=self._client_bl.receive_msg(need_json=True)
         if msg['code']=="200":
             self._ingredients.clear_frames()
-            self.destroy_categorize_lists_frame()
+            self.destroy_specific_frames()
             self._btn_add.configure(state="normal")
             self._client_bl.update_user_info("DELETE_ALL",args)
 

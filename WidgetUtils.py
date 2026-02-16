@@ -1,4 +1,5 @@
 import time
+from csv import excel
 
 from Protocol import *
 
@@ -44,7 +45,7 @@ class ScrollableFrameBase(CTkScrollableFrame):
         self._parent_canvas.configure(scrollregion=self._parent_canvas.bbox("all"))
         for f in self.winfo_children():
             f.after(0,f.destroy)
-        self._placeholder_for_scrollbar = CTkFrame(master=self, width=20, height=20, fg_color="transparent")
+        self._placeholder_for_scrollbar = CTkFrame(master=self, width=1, height=1, fg_color="transparent")
         self._placeholder_for_scrollbar.pack()
 
 
@@ -107,6 +108,7 @@ class Ingredients(ScrollableFrameBase):
             self._placeholder_for_scrollbar=None
         self.callback_destroy_specific_frame()
         self.callback_update_buttons("disabled")
+        #self.callback_update_buttons("disabled")
         self.is_currently_editing=True
         self.new_inner_frame=True
         self.previous=""
@@ -145,31 +147,34 @@ class Ingredients(ScrollableFrameBase):
         if self._placeholder_for_scrollbar:
             self._placeholder_for_scrollbar.after(0,self._placeholder_for_scrollbar.destroy)
             self._placeholder_for_scrollbar = None
+        self.start_animating()
         def create_frames(i,data):
             # create the frame
-            if i>=len(data):
-                self.stop_animating()
-                return
-            current_frame=CTkFrame(master=self, **self._internal_frame_look)
-            current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
-            current_entry = CTkEntry(master=current_frame)
-            current_entry.place(x=5, y=7)
-            current_entry.insert(0,data[i])
-            current_entry.configure(state="disabled")
-            current_confirm_btn = CTkButton(master=current_frame, width=30, height=30, text="✎",text_color="white",
-                                            fg_color="black", font=("Arial", 18))
-            current_confirm_btn.configure(command=lambda entry=current_entry, btn=current_confirm_btn: self.on_click_main_btn(entry, btn))
-            current_confirm_btn.place(x=150, y=5)
-            current_categorize_btn = CTkButton(master=current_frame, width=30, height=30, text="🧺",
-                                               text_color="gray",fg_color="black", font=("Ariel", 18),
-                                               command=lambda entry=current_entry, frame=current_frame: self.on_click_categorize(entry,frame))
-            current_categorize_btn.place(x=185, y=5)
-            current_delete_btn = CTkButton(master=current_frame, width=30, height=30, text="🗑",
-                                           text_color="red",fg_color="black", font=("Arial", 18),
-                                           command=lambda frame=current_frame,entry=current_entry: self.on_click_delete_btn(frame, entry))
-            current_delete_btn.place(x=220, y=5)
-            self.scheduled_animate=self.after(30,create_frames,i+1,data)
-        self.start_animating()
+            try:
+                if i>=len(data):
+                    self.stop_animating()
+                    return
+                current_frame=CTkFrame(master=self, **self._internal_frame_look)
+                current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
+                current_entry = CTkEntry(master=current_frame)
+                current_entry.place(x=5, y=7)
+                current_entry.insert(0,data[i])
+                current_entry.configure(state="disabled")
+                current_confirm_btn = CTkButton(master=current_frame, width=30, height=30, text="✎",text_color="white",
+                                                fg_color="black", font=("Arial", 18))
+                current_confirm_btn.configure(command=lambda entry=current_entry, btn=current_confirm_btn: self.on_click_main_btn(entry, btn))
+                current_confirm_btn.place(x=150, y=5)
+                current_categorize_btn = CTkButton(master=current_frame, width=30, height=30, text="🧺",
+                                                   text_color="gray",fg_color="black", font=("Ariel", 18),
+                                                   command=lambda entry=current_entry, frame=current_frame: self.on_click_categorize(entry,frame))
+                current_categorize_btn.place(x=185, y=5)
+                current_delete_btn = CTkButton(master=current_frame, width=30, height=30, text="🗑",
+                                               text_color="red",fg_color="black", font=("Arial", 18),
+                                               command=lambda frame=current_frame,entry=current_entry: self.on_click_delete_btn(frame, entry))
+                current_delete_btn.place(x=220, y=5)
+                self.scheduled_animate=self.after(50,create_frames,i+1,data)
+            except Exception as e:
+                write_to_log(e)
         create_frames(0,user_data[self.name])
 
 
@@ -272,38 +277,38 @@ class DynamicList(ScrollableFrameBase):
         current_entry.bind('<Return>', lambda event: self.on_click_main_btn(current_entry, current_main_btn))
 
     def initiate_first_lists(self,user_data):
-        write_to_log("got to first lists")
         if self._placeholder_for_scrollbar:
             self._placeholder_for_scrollbar.after(0,self._placeholder_for_scrollbar.destroy)
             self._placeholder_for_scrollbar=None
-        def create_frames(i,data):
-            if i>=len(data):
-                write_to_log("returned")
-                self.stop_animating()
-                return
-            if data[i]!="Main":
-                current_frame=CTkFrame(master=self, **self._internal_frame_look)
-                current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
-                current_entry = CTkEntry(master=current_frame,width=150,height=40,font=("Calibri",17))
-                current_entry.place(x=5, y=7)
-                current_entry.insert(0,data[i])
-                current_entry.configure(state="disabled")
-                current_confirm_btn = CTkButton(master=current_frame, width=40, height=40, text="✎",text_color="white", fg_color="black", font=("Arial", 18))
-                current_confirm_btn.configure(command=lambda entry=current_entry,btn=current_confirm_btn: self.on_click_main_btn(entry, btn))
-                current_confirm_btn.place(x=170, y=5)
-                current_open_btn = CTkButton(master=current_frame, width=40, height=40, text="📂", text_color="gray",
-                                             fg_color="black", font=("Ariel", 18),
-                                             command=lambda entry=current_entry: self.on_click_open_list(entry))
-                current_open_btn.place(x=220, y=5)
-                current_delete_btn = CTkButton(master=current_frame, width=40, height=40, text="🗑",
-                                               text_color="red",fg_color="black", font=("Arial", 18),
-                                               command=lambda entry=current_entry,frame=current_frame: self.on_click_delete_btn(frame, entry))
-                current_delete_btn.place(x=270, y=5)
-            self.scheduled_animate = self.after(30, create_frames, i + 1, data)
         self.start_animating()
-        create_frames(0,list(user_data.keys()))
-
-
+        def create_frames(i,data):
+            try:
+                if i>=len(data):
+                    write_to_log("got to end lists")
+                    self.stop_animating()
+                    return
+                if data[i]!="Main":
+                    current_frame=CTkFrame(master=self, **self._internal_frame_look)
+                    current_frame.pack(pady=3, padx=2, fill="x",anchor='w')
+                    current_entry = CTkEntry(master=current_frame,width=150,height=40,font=("Calibri",17))
+                    current_entry.place(x=5, y=7)
+                    current_entry.insert(0,data[i])
+                    current_entry.configure(state="disabled")
+                    current_confirm_btn = CTkButton(master=current_frame, width=40, height=40, text="✎",text_color="white", fg_color="black", font=("Arial", 18))
+                    current_confirm_btn.configure(command=lambda entry=current_entry,btn=current_confirm_btn: self.on_click_main_btn(entry, btn))
+                    current_confirm_btn.place(x=170, y=5)
+                    current_open_btn = CTkButton(master=current_frame, width=40, height=40, text="📂", text_color="gray",
+                                                 fg_color="black", font=("Ariel", 18),
+                                                 command=lambda entry=current_entry: self.on_click_open_list(entry))
+                    current_open_btn.place(x=220, y=5)
+                    current_delete_btn = CTkButton(master=current_frame, width=40, height=40, text="🗑",
+                                                   text_color="red",fg_color="black", font=("Arial", 18),
+                                                   command=lambda entry=current_entry,frame=current_frame: self.on_click_delete_btn(frame, entry))
+                    current_delete_btn.place(x=270, y=5)
+                self.scheduled_animate = self.after(50, create_frames, i + 1, data)
+            except Exception as e:
+                write_to_log(e)
+        create_frames(0, list(user_data.keys()))
 
     def on_click_main_btn(self,current_entry:CTkEntry,current_btn:CTkButton):
         current_state = current_entry.cget("state")
@@ -407,7 +412,6 @@ class DraggableFrame(CTkFrame):
         if not self._specific_frame_drag_scheduled:
             self._specific_frame_drag_scheduled = True
             self.after(3, _do_drag, x, y)
-
 
 
 

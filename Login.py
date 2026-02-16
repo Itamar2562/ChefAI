@@ -60,12 +60,12 @@ class SignIn:
                                     height=30, width=150)
         self._btn_login.place(x=425, y=260)
         self._btn_back = CTkButton(self._signin_window, text="Back", height=30, width=80, text_color="white",
-                                   hover_color="#4185D0", font=("Calibri", 17), fg_color="#C850C0",
+                                   hover_color="#6A3DB4", font=("Calibri", 17), fg_color="#7C4CC2",
                                    command=self.on_click_back)
         self._btn_back.place(x=915, y=10)
 
-        self._btn_register=CTkButton(self._signin_window,text="Register",height=30,width=80,text_color="white",hover_color="#4185D0",
-                                     font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_register)
+        self._btn_register=CTkButton(self._signin_window,text="Register",height=30,width=80,text_color="white",hover_color="#6A3DB4",
+                                     font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_register)
         self._btn_register.place(x=915,y=50)
     #get back home from sign in screen
     def on_click_back(self):
@@ -232,14 +232,14 @@ class Register:
         self._default_items_checkbox.place(x=585, y=315)
         self._default_items_checkbox.select()
 
-        self._btn_back=CTkButton(self._register_window,text="Back",height=30, width=80,text_color="white",hover_color="#4185D0",font=("Calibri",17),fg_color="#C850C0",command=self.on_click_back)
+        self._btn_back=CTkButton(self._register_window,text="Back",height=30, width=80,text_color="white",hover_color="#6A3DB4",font=("Calibri",17),fg_color="#7C4CC2",command=self.on_click_back)
         self._btn_back.place(x=915, y=10)
 
 
 
 
-        self._btn_signin=CTkButton(self._register_window,text="Sign in",height=30,width=80,text_color="white",hover_color="#4185D0",
-                                     font=("Calibri", 17), fg_color="#C850C0",command=self.on_click_signin)
+        self._btn_signin=CTkButton(self._register_window,text="Sign in",height=30,width=80,text_color="white",hover_color="#6A3DB4",
+                                     font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_signin)
         self._btn_signin.place(x=915,y=50)
     #go back to home from Register
     def on_click_back(self):
