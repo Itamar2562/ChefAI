@@ -1,14 +1,26 @@
+import random
 from Protocol import *
 from Database import *
 from Server_AI import *
+from cryptography.hazmat.primitives.asymmetric import rsa,padding
+from cryptography.hazmat.primitives import serialization,hashes
+from cryptography.hazmat.backends import default_backend
+from cryptography.fernet import Fernet
+import threading
+from datetime import date
 class ServerBL:
-    def __init__(self, ip: str, port: int):
+    def __init__(self, ip: str, port: int,callback_add_client,callback_remove_client,callback_configure_client_id):
         self._ip = ip
         self._port = port
         self._server_socket = None
         self._srv_is_running=True
         self._client_handler=[]
+        self._connected_ids=[]
         self._stop_event=threading.Event()
+
+        self.callback_add_client=callback_add_client
+        self.callback_remove_client=callback_remove_client
+        self.callback_configure_client_id=callback_configure_client_id
 
     def start_server(self):
         self._server_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -18,17 +30,28 @@ class ServerBL:
         self._server_socket.listen()
         write_to_log("[Server_BL] server is listening")
         self._srv_is_running=True
+        self._client_handler=[]
+        self._connected_ids=[]
         while self._srv_is_running and self._server_socket is not None:
             try:
                 client_socket,address=self._server_socket.accept()
                 write_to_log(f"[Server_BL] Client connected: {address}")
-                client=ClientHandler(client_socket,address,self._stop_event,self.update_client_handler)
+                client=ClientHandler(client_socket,address,self._stop_event,self.update_client_handler,self.add_id,
+                                     self.remove_client,self.remove_id)
                 client.start()
                 self._client_handler.append(client)
+                self.callback_add_client(address[0],address[1],-1)
                 write_to_log(f"[SERVER_BL] ACTIVE CONNECTION {threading.active_count() - 2}")
             except Exception as e:
                 write_to_log(e)
                 break
+    def remove_client(self,address,user_id):
+        self.remove_id(address,user_id)
+        self.callback_remove_client(address[0],address[1])
+    def remove_id(self,address,user_id):
+        if user_id!=-1:
+            self._connected_ids.remove(user_id)
+            self.callback_configure_client_id(address[0],address[1],-1)
 
     def stop_server(self):
         self._stop_event.set()
@@ -48,22 +71,31 @@ class ServerBL:
         if thread in self._client_handler:
             self._client_handler.remove(thread)
 
+    def add_id(self,address,user_id):
+        if user_id in self._connected_ids:
+            return False
+        self._connected_ids.append(user_id)
+        self.callback_configure_client_id(address[0],address[1],user_id)
+        return True
+
 class ClientHandler(threading.Thread):
     _client_socket=None
     _client_address=None
     _connected=False
     _stop_event=None
-    def __init__(self, client_socket, address,stop_event,update_client_handler):
+    def __init__(self, client_socket, address,stop_event,update_client_handler,callback_add_id,
+                 callback_remove_client,callback_remove_id):
         super().__init__()
         self._client_socket=client_socket
         self._client_address=address
         self._connected=True
         self._stop_event=stop_event
         self.callback_update_client_handler=update_client_handler
+        self.callback_add_id=callback_add_id
+        self.callback_remove_client=callback_remove_client
+        self.callback_remove_id=callback_remove_id
         self._current_id=-1
         self._fernet=None
-
-
 
     #an override of the standard run function inside thread that is called when a thread
     #is created
@@ -78,11 +110,10 @@ class ClientHandler(threading.Thread):
                write_to_log(f"msg:{data}!")
                cmd_type=check_cmd(cmd)
                if cmd_type==1:
-                   self.handle_make(data)
+                   self.handle_ai(cmd,data)
                elif cmd_type==2:
                    self.handle_db_login_msg(cmd,data)
                elif cmd_type==3:
-                   write_to_log("got here2")
                    self.handle_ingredients(cmd,data)
                elif cmd_type==4:
                    self.handle_list(cmd,data)
@@ -92,14 +123,22 @@ class ClientHandler(threading.Thread):
                 if not self.check_conn():
                     self.callback_update_client_handler(self) #send the thread to be removed
                     write_to_log(f"[Server_BL] Client: {self._client_address} disconnected")
+                    self.callback_remove_client(self._client_address,self._current_id)
                     break
         self._client_socket.shutdown(socket.SHUT_RDWR)
         self._client_socket.close()
         self._client_socket = None
 
+    def handle_ai_usage(self):
+        today=date.today()
+        ai_usage_count=get_ai_usage_count(self._current_id,today)
+        response=self.create_response_dict("200","AI usage count")
+        response['data']=ai_usage_count
+        self.send_data("AI_COUNT", response)
+
     def handle_db_login_msg(self,cmd,data):
         if cmd == "SIGN_OUT":
-            self._current_id = -1
+            self.user_sign_out()
             return
         data=json.loads(data)
         username=data['name']
@@ -112,13 +151,23 @@ class ClientHandler(threading.Thread):
             code,msg=create_response_msg_db(cmd, username,password)
         write_to_log(f"msg is {msg}")
         response=self.create_response_dict(code,msg)
-        if code == "200":
+        if code == "200": #logged in successfully
             data=self.get_user_info(username,password)
-            response["data"]=data
+            succeed=self.callback_add_id(self._client_address,self._current_id)
+            if succeed:
+                response["data"]=data
+            else:
+                self._current_id=-1
+                response=self.create_response_dict("409","Your account is already logged in on "
+                                                         "another device.\n Please log out "
+                                                         "from the other session before logging in here.")
         self.send_data("LOGIN",response)
 
+    def user_sign_out(self):
+        self.callback_remove_id(self._client_address,self._current_id)
+        self._current_id=-1
+
     def handle_ingredients(self,cmd,data):
-        write_to_log("got here maybe")
         if cmd == "ADD":
             response = self.add_ingredient_to_db(data)
             self.send_data("ADD",response)
@@ -136,19 +185,53 @@ class ClientHandler(threading.Thread):
     #data will look like this [10.0, 3, "fried", "oven", "soup", 3, "halal", "vegan", "kosher"] False this is goofy version
     #to separate the data I will get length and skip time with it
     #then I will run the loop for the amount+skipped parts e.g. 2+3=5 -> 2:5 will get 3 ingredients
+    def handle_ai(self,cmd,data):
+       if cmd=="MAKE":
+           self.handle_make(data)
+       elif cmd=="AI_USAGE":
+           self.handle_ai_usage()
+
     def handle_make(self,parameters):
-        parameters=json.loads(parameters)
+        parameters = json.loads(parameters)
         write_to_log(parameters['time'])
         write_to_log(parameters['type'])
         write_to_log(parameters['preference'])
-        data=get_lists_with_ingredients(self._current_id)
-        ingredients=self.extract_all_ingredients(data)
-        ingredients=json.dumps(ingredients)
-        #in client receive create a receive loop getting it one by one
-        ai_response=send_and_receive_ai_request(parameters['time'],parameters['type'],parameters['difficulty'],parameters['preference'], ingredients)
-        ai_response=process_for_json_loads(ai_response)
-        write_to_log(ai_response)
-        self.send_data("AI",ai_response)
+        data = get_lists_with_ingredients(self._current_id)
+        ingredients = self.extract_all_ingredients(data)
+        ingredients = json.dumps(ingredients)
+        # in client receive create a receive loop getting it one by one
+        can_use_api, ai_usage = self.handle_amount_of_requests()
+        self.clear_ai_usage_dates()
+        if can_use_api:
+            response = send_and_receive_ai_request(parameters['time'], parameters['type'], parameters['difficulty'],
+                                                   parameters['preference'], ingredients)
+            response = process_for_json_loads(response)
+            write_to_log(response)
+        else:
+            response = DEFAULT_AI_RESPONSE
+        new_response = self.add_usage_count(response, ai_usage)
+        self.send_data("AI", new_response)
+
+    def handle_amount_of_requests(self):
+        today=date.today()
+        can_use_api,ai_usage=handle_usage(self._current_id,today)
+        return can_use_api,ai_usage
+
+    def add_usage_count(self,response:str,amount)->str:
+        try:
+            response=json.loads(response)
+            new_response={"data":response,"remaining":MAX_AI_USAGE_AMOUNT-amount}
+            return json.dumps(new_response)
+        except json.decoder.JSONDecodeError:
+            default_response=json.loads(DEFAULT_AI_RESPONSE)
+            new_response = {"data": default_response, "remaining": MAX_AI_USAGE_AMOUNT - amount}
+            return json.dumps(new_response)
+
+    def clear_ai_usage_dates(self):
+        rnd=random.random()
+        if rnd<0.1: #10%
+            clear_ai_usage_from_db()
+
 
     def extract_all_ingredients(self,data):
         ingredients=[]
@@ -255,8 +338,12 @@ class ClientHandler(threading.Thread):
 
     def get_user_info(self,username,password):
         self._current_id = get_id(username,password)
-        data=get_lists_with_ingredients(self._current_id)
-        return data
+        lists=get_lists_with_ingredients(self._current_id)
+        today=date.today()
+        ai_usage_count=get_ai_usage_count(self._current_id,today)
+        user_info={'lists':lists,"remaining":MAX_AI_USAGE_AMOUNT-ai_usage_count}
+        write_to_log(user_info)
+        return user_info
 
     def send_data(self,cmd,args,verbose=True):
         try:

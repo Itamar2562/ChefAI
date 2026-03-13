@@ -1,28 +1,21 @@
 import logging
 import socket
-from datetime import datetime
-import time
-import threading
+from datetime import datetime,timedelta
 from customtkinter import *
-from cryptography.hazmat.primitives.asymmetric import rsa,padding
-from cryptography.hazmat.primitives import serialization,hashes
-from cryptography.hazmat.backends import default_backend
-from cryptography.fernet import Fernet
 import json
-from PIL import Image
-import re
 import fpdf
-import os
 
 SERVER_IP="0.0.0.0"
 CLIENT_IP="127.0.0.1"
 PORT =8822
-BUFFER_SIZE = 1024
 HEADER_LEN = 4
-FORMAT= 'utf-8'
 DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
 INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL","TRANSFER"]
 LIST_CMD=["LIST","DELETE_LIST"]
+AI_CMD=["MAKE","AI_USAGE"]
+MAX_AI_USAGE_AMOUNT=100
+DEFAULT_AI_RESPONSE='[{"type": "", "time": "", "name": "no available recipes", "description": "", "difficulty": "", "nutrition": "", "data": ""}]'
+
 
 Codes={
     "200": "ok", #response
@@ -31,10 +24,6 @@ Codes={
     "409" : "conflict", #when trying to add smg that already exists
     "500" :"server error" #error
 }
-
-
-
-
 
 # prepare Log file
 LOG_FILE = 'LOG.log'
@@ -55,22 +44,31 @@ def write_to_log(msg):
     logging.info(msg)
     print(msg)
 
+def seconds_until_midnight():
+    now = datetime.now()
+    tomorrow = now.date() + timedelta(days=1)
+    midnight = datetime.combine(tomorrow, datetime.min.time())
+    return (midnight - now).total_seconds()
+
+
 def process_for_json_loads(text: str):
-    # Remove code fences if present
-    text = text.strip()
+    text = text.replace("```json", "").replace("```", "")
+    start = None
+    depth = 0
+    for i, c in enumerate(text):
+        if c == "[":
+            if start is None:
+                start = i
+            depth += 1
 
-    # Try direct parse first (fast path)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+        elif c == "]":
+            if depth > 0:
+                depth -= 1
+                if depth == 0:
+                    json_str = text[start:i + 1]
+                    return json_str
 
-    # Regex to extract first JSON array or object
-    match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
-    if not match:
-        raise ValueError("No valid JSON found in AI response")
-
-    return json.loads(match.group(1))
+    return DEFAULT_AI_RESPONSE
 
 #gets the message with header and extracts the msg
 #returns error if the msg isn't with a valid header
@@ -100,28 +98,50 @@ def receive_msg(current_socket:socket):
 
 def save_to_pdf(data):
     try:
-        os.makedirs("Saved Recipes", exist_ok=True)
-        if os.path.isfile(fr"Saved Recipes\{data['name']}.pdf"):
-            return "409" #already exists
+        directory=open_directory_dialog(data['name'])
+        if directory=="no directory":
+            return False
         pdf = fpdf.FPDF()
         pdf.add_page()
-        pdf.set_font("Helvetica", style="B", size=16)
+        pdf.set_font("Helvetica", style="BU", size=16)
+        pdf.set_text_color(44, 62, 80)
         pdf.multi_cell(0, 10, data['name'], border=0,align="C")
 
+        pdf.set_font("Arial",size=14)
+        pdf.set_text_color(74, 74, 74)
+        pdf.multi_cell(0, 10, data['description'], align='J')
+
         pdf.set_font("Arial", size=12)
+        pdf.set_text_color(0, 0, 0)
         pdf.multi_cell(0, 10, data['data'], align='J')
 
-        pdf.set_font("Helvetica", style="B", size=16)
+        pdf.set_font("Helvetica", style="BU", size=16)
+        pdf.set_text_color(44, 62, 80)
         pdf.multi_cell(0, 10, 'Nutrition', border=0,align="C")
 
         pdf.set_font("Arial", size=12)
+        pdf.set_text_color(0, 0, 0)
         pdf.multi_cell(0, 10, data['nutrition'], align='J')
-
-        pdf.output(fr"Saved Recipes\{data['name']}.pdf")
-        return "200"
+        pdf.output(directory)
+        return True
     except Exception as e:
         write_to_log(f"Exception {e} while saving to pdf")
-        return "500"
+        return False
+
+def open_directory_dialog(name):
+    """Opens a directory dialog to select a folder."""
+    directory_path = filedialog.asksaveasfile(
+        title="Select a directory",
+        initialdir="/",
+        initialfile=name,
+        defaultextension=".pdf",
+        filetypes=[("PDF files", "*.pdf")]
+    )
+    if directory_path:
+        return directory_path.name
+    else:
+        return "no directory"
+
 
 #recives cmd and args(list) from client and turns them into
 #header_cmd_header_args
@@ -145,7 +165,7 @@ def encode_data(data):
 
 #currently doesn't do anything (from natalie's code) I don't think I need it (i needed it lmao)
 def check_cmd(cmd):
-    if cmd=="MAKE":
+    if cmd in AI_CMD:
         return 1
     if cmd in DATABASE_CMD:
         return 2

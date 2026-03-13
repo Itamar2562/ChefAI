@@ -1,9 +1,8 @@
 from Protocol import *
-
-# class ClientStatue:
-#     def __init__(self):
-#         self.connected=False
-#         self.signed_in=False
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization,hashes
+from cryptography.hazmat.backends import default_backend
+from cryptography.fernet import Fernet
 
 class ClientBL:
     def __init__(self,ip,port):
@@ -81,43 +80,45 @@ class ClientBL:
                 self.client_socket.close()
             self.client_socket=None
             return False
+    def get_ai_usage_remaining_from_server(self):
+        self.send_data('AI_USAGE',"")
+        used=self.receive_msg(need_json=True)
+        return used['data']
 
     def update_user_info(self, cmd, args):
         if cmd == "ADD":
             list_name=args[0]
             prev = args[1]
             curr = args[2]
-            if prev in self.user_data[ list_name]:
-                self.user_data[ list_name].remove(prev)
-                self.user_data[ list_name].append(curr)
+            if prev in self.user_data['lists'][list_name]:
+                self.user_data['lists'][list_name].remove(prev)
+                self.user_data['lists'][list_name].append(curr)
             else:
-                self.user_data[list_name].append(curr)
+                self.user_data['lists'][list_name].append(curr)
         elif cmd == "ADD_LIST":
             prev_name = args[0]
             curr_name = args[1]
-            if prev_name in self.user_data.keys():
-                self.user_data[curr_name]=self.user_data[prev_name]
-                del self.user_data[prev_name]
+            if prev_name in self.user_data['lists'].keys():
+                self.user_data['lists'][curr_name]=self.user_data[prev_name]
+                del self.user_data['lists'][prev_name]
             else:
-                self.user_data[curr_name]=[]
+                self.user_data['lists'][curr_name]=[]
         elif cmd == "DELETE":
             list_name=args[0]
             curr = args[1]
-            self.user_data[list_name].remove(curr)
+            self.user_data['lists'][list_name].remove(curr)
         elif cmd=="DELETE_ALL":
             list_name=args[0]
-            self.user_data[list_name]=[]
+            self.user_data['lists'][list_name]=[]
         elif cmd == "DELETE_LIST":
             curr=args[0]
-            del self.user_data[curr]
+            del self.user_data['lists'][curr]
         elif cmd=="TRANSFER":
             src_list=args[0]
             dst_list=args[1]
             ingredient=args[2]
-            self.user_data[src_list].remove(ingredient)
-            self.user_data[dst_list].append(ingredient)
-
-
+            self.user_data['lists'][src_list].remove(ingredient)
+            self.user_data['lists'][dst_list].append(ingredient)
 
     #add a recieve queue instead
     def receive_msg(self,need_bytes=False,need_json=False):
@@ -129,8 +130,6 @@ class ClientBL:
                 msg=self.decrypt(msg).decode()
         #write_to_log(msg)
         if need_json:
-            write_to_log(type(msg))
-            write_to_log(msg)
             return json.loads(msg)
         return msg
 

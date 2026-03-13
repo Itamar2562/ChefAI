@@ -1,7 +1,8 @@
 import sqlite3
 import hashlib
 
-from Protocol import write_to_log
+from Protocol import write_to_log, MAX_AI_USAGE_AMOUNT
+
 DB_NAME = "Database.db"
 TABLE_USERS = "Users"
 DEFAULT_LISTS=["Carbs","Vegetables","Fruits","Protein","Liquids","Spices"]
@@ -18,7 +19,6 @@ def get_conn():
 
 def create_response_msg_db(cmd: str,username,password,default_items=0):
     conn= get_conn()
-    write_to_log(conn)
     cursor=conn.cursor()
     try:
         # connect to DB(if it doesn't exist, it will be created)
@@ -53,6 +53,17 @@ def create_response_msg_db(cmd: str,username,password,default_items=0):
             name TEXT NOT NULL,
             FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
         )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_usage (
+    user_id TEXT,
+    usage_date DATE,
+    usage_count INTEGER,
+    PRIMARY KEY (user_id, usage_date),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+        
         """)
         # INSERT DATA
         password=hash_password(password)
@@ -149,6 +160,43 @@ def get_id(username,password):
         conn.rollback()
         return -1
 
+def handle_usage(user_id,today):
+    conn=get_conn()
+    cursor=conn.cursor()
+    ai_usage=get_ai_usage_count(user_id,today)
+    write_to_log(ai_usage)
+    if ai_usage ==0:
+        cursor.execute("INSERT INTO ai_usage (user_id,usage_date,usage_count) VALUES (?,?,1)",
+                     (user_id,today))
+        conn.commit()
+        return True,1
+    elif ai_usage<MAX_AI_USAGE_AMOUNT:
+        cursor.execute("UPDATE  ai_usage SET usage_count=? WHERE user_id=? AND usage_date=?",
+                     (ai_usage+1,user_id, today))
+        conn.commit()
+        return True,ai_usage+1
+    return False,ai_usage+1
+
+def get_ai_usage_count(user_id,today):
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT usage_count FROM ai_usage WHERE user_id = ? AND usage_date = ?", (user_id, today))
+    result = cursor.fetchone()
+    if result is None:
+        return 0
+    else:
+        return result[0]
+
+def clear_ai_usage_from_db():
+    write_to_log("cleanup")
+    conn=get_conn()
+    cursor=conn.cursor()
+    cursor.execute("DELETE FROM ai_usage WHERE usage_date < DATE('now','-30 days')")
+    conn.commit()
+
+
+
+
 def get_list_id_by_name(user_id, list_name):
     conn = get_conn()
     cursor = conn.cursor()
@@ -216,7 +264,7 @@ def rename_ingredient(list_id, prev_name, new_name):
     except Exception as e:
         write_to_log(e)
         conn.rollback()
-        return False
+        return "500"
 
 def ingredient_exists(conn,dst_list_id,ingredient):
     cursor = conn.cursor()
@@ -256,10 +304,8 @@ def transfer_ingredient(user_id,src_list,dst_list,ingredient):
 
 
 def handle_db_list_update(user_id:int, data:list):
-    write_to_log("im here")
     prev_name=data[0]
     curr_name=data[1]
-    write_to_log(curr_name)
     if not prev_name:
         return create_list(user_id, curr_name)
 
