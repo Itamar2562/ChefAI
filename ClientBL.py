@@ -24,18 +24,23 @@ class ClientBL:
     def add_difficulty_parameter(self,parameter):
         self.parameters['difficulty']=parameter
 
+
     def add_preference_parameters(self,parameter):
-        self.parameters['preference'].append(parameter)
+        if parameter in self.parameters['preference']:
+            self.parameters['preference'].remove(parameter)
+        else:
+            self.parameters['preference'].append(parameter)
 
     def get_parameters(self,curr_time):
         self.parameters['time']=curr_time
         return self.parameters
 
+    #connect to server
     def connect(self):
         try:
             self.client_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
             self.client_socket.connect((self.ip,self.port))
-            write_to_log(f"[Client_BL] client {self.client_socket.getsockname()} connected ")
+            write_to_log(f"[Client_BL] client {self.client_socket.getsockname()} connected")
             self.fernet=None
             self.handle_first_handshake()
             return True
@@ -43,15 +48,16 @@ class ClientBL:
             write_to_log("[Client_BL] attempting to connect...")
             return False
 
+    #cryptography handshake
     def handle_first_handshake(self):
         pem_public_key=self.receive_msg(need_bytes=True)
         public_key = serialization.load_pem_public_key(pem_public_key,backend=default_backend())
         session_key=Fernet.generate_key()
-        encrypted_session_key = public_key.encrypt(session_key,padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+        encrypted_session_key = public_key.encrypt(session_key,padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                                            algorithm=hashes.SHA256(),label=None))
         self.send_data("SESSION_KEY",encrypted_session_key,False)
         write_to_log(f"session key : {session_key}")
         self.fernet = Fernet(session_key)
-
 
     def encrypt(self, data):
         return self.fernet.encrypt(data)
@@ -69,17 +75,16 @@ class ClientBL:
                     return False
                 else:
                     return True
-            #if client_socket is none return false
-            return False
+            else:
+                return False
         except BlockingIOError:
-            # No data available, but connection is still alive
-            return True
-        #if got any other exceptions then connection is closed
-        except:
+            return True # No data available, but connection is still alive
+        except: #if got any other exceptions then connection is closed
             if self.client_socket:
                 self.client_socket.close()
             self.client_socket=None
             return False
+
     def get_ai_usage_remaining_from_server(self):
         self.send_data('AI_USAGE',"")
         used=self.receive_msg(need_json=True)
@@ -87,40 +92,67 @@ class ClientBL:
 
     def update_user_info(self, cmd, args):
         if cmd == "ADD":
-            list_name=args[0]
-            prev = args[1]
-            curr = args[2]
-            if prev in self.user_data['lists'][list_name]:
-                self.user_data['lists'][list_name].remove(prev)
-                self.user_data['lists'][list_name].append(curr)
-            else:
-                self.user_data['lists'][list_name].append(curr)
+            list_name=args['list_name']
+            prev = args['prev_ingredient']
+            curr = args['ingredient']
+            self.update_user_info_add_ingredient(list_name,prev,curr)
         elif cmd == "ADD_LIST":
-            prev_name = args[0]
-            curr_name = args[1]
-            if prev_name in self.user_data['lists'].keys():
-                self.user_data['lists'][curr_name]=self.user_data[prev_name]
-                del self.user_data['lists'][prev_name]
-            else:
-                self.user_data['lists'][curr_name]=[]
+            prev_name = args['prev_list']
+            curr_name = args['list_name']
+            self.update_user_info_add_list(prev_name,curr_name)
         elif cmd == "DELETE":
-            list_name=args[0]
-            curr = args[1]
-            self.user_data['lists'][list_name].remove(curr)
-        elif cmd=="DELETE_ALL":
-            list_name=args[0]
-            self.user_data['lists'][list_name]=[]
+            list_name=args['list_name']
+            curr = args['ingredient']
+            self.update_user_info_delete_ingredient(list_name,curr)
+        elif cmd=="CLEAR_LIST":
+            list_name=args['list_name']
+            self.update_user_info_clear_ingredient_list(list_name)
         elif cmd == "DELETE_LIST":
-            curr=args[0]
-            del self.user_data['lists'][curr]
+            list_name=args['list_name']
+            self.update_user_info_delete_list(list_name)
         elif cmd=="TRANSFER":
-            src_list=args[0]
-            dst_list=args[1]
-            ingredient=args[2]
-            self.user_data['lists'][src_list].remove(ingredient)
-            self.user_data['lists'][dst_list].append(ingredient)
+            src_list=args['src_list']
+            dst_list=args['dst_list']
+            ingredient=args['ingredient']
+            self.transfer_ingredient(src_list,dst_list,ingredient)
 
-    #add a recieve queue instead
+    def update_user_info_add_ingredient(self,list_name,prev,curr):
+        lists=self.user_data['lists']
+        if prev in self.user_data['lists'][list_name]:
+            lists[list_name].remove(prev)
+            lists[list_name].append(curr)
+        else:
+            lists[list_name].append(curr)
+
+    def update_user_info_add_list(self,prev_name,curr_name):
+        lists=self.user_data['lists']
+        if prev_name in lists.keys():
+            lists[curr_name] = lists[prev_name]
+            del lists[prev_name]
+        else:
+            lists[curr_name] = []
+
+
+    def update_user_info_delete_ingredient(self,list_name,curr_name):
+        lists=self.user_data['lists']
+        if curr_name in lists[list_name]:
+            lists[list_name].remove(curr_name)
+
+    def update_user_info_clear_ingredient_list(self,list_name):
+        self.user_data['lists'][list_name] = []
+
+    def update_user_info_delete_list(self,list_name):
+        lists=self.user_data['lists']
+        if lists:
+            del lists[list_name]
+
+    def transfer_ingredient(self,src_list,dst_list,ingredient):
+        lists=self.user_data['lists']
+        if ingredient in lists[src_list]:
+            lists[src_list].remove(ingredient)
+            lists[dst_list].append(ingredient)
+
+
     def receive_msg(self,need_bytes=False,need_json=False):
         if need_bytes:
             cmd, msg=receive_bytes_msg(self.client_socket)
@@ -128,7 +160,6 @@ class ClientBL:
             cmd, msg=receive_msg(self.client_socket)
             if self.fernet:
                 msg=self.decrypt(msg).decode()
-        #write_to_log(msg)
         if need_json:
             return json.loads(msg)
         return msg
@@ -139,7 +170,7 @@ class ClientBL:
         try:
             args=encode_data(args)
             cmd=encode_data(cmd)
-            if self.fernet: #first encrypt and then get msg length and arrange it
+            if self.fernet:
                 args = self.encrypt(args)
                 cmd=self.encrypt(cmd)
             msg= create_msg(cmd, args)
@@ -147,7 +178,7 @@ class ClientBL:
             if verbose:
                 write_to_log(f"[Client_BL] send {msg}")
         except Exception as e:
-            write_to_log(f"Error {e} while sending massage")
+            write_to_log(f"[Client_BL] Error {e} while sending massage")
 
 
 

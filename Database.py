@@ -1,24 +1,17 @@
 import sqlite3
-import hashlib
 
 from Protocol import write_to_log, MAX_AI_USAGE_AMOUNT
 
 DB_NAME = "Database.db"
-TABLE_USERS = "Users"
 DEFAULT_LISTS=["Carbs","Vegetables","Fruits","Protein","Liquids","Spices"]
 
-
+#just give conn to client handler maybe
 def get_conn():
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-# close at end
-
-
-
-def create_response_msg_db(cmd: str,username,password,default_items=0):
-    conn= get_conn()
+def create_response_msg_db(conn,cmd,username,password,default_items=0):
     cursor=conn.cursor()
     try:
         # connect to DB(if it doesn't exist, it will be created)
@@ -66,37 +59,34 @@ def create_response_msg_db(cmd: str,username,password,default_items=0):
         
         """)
         # INSERT DATA
-        password=hash_password(password)
         response=""
         if cmd=="SIGNIN":
            response=sign_in(conn,username,password)
         elif cmd=="REG":
            response=register(conn,username,password,default_items)
         return response
-    except Exception as E:
-        write_to_log(f"database Error {E}")
-        return "500","Error"
+    except Exception as e:
+        write_to_log(f"database Error {e}")
+        return "500"
 
 
 def sign_in(conn,username,password):
-    write_to_log("got here")
     cursor=conn.cursor()
     query = "SELECT EXISTS (SELECT 1 FROM users WHERE  username = ? AND password = ?)"
     cursor.execute(query, (username, password))
     result = cursor.fetchone()[0]
     if result == 1:
-        response = "200","connected"
+        response = "200"
     else:
-        response = "401","Wrong username or password"
+        response = "401"
     return response
 
 def register(conn,username,password,default_items):
-    write_to_log("got here")
     cursor=conn.cursor()
     try:
         if user_exists(conn,username):
             write_to_log(f"user exists worked")
-            response="401","Username already taken"
+            response="409"
             return response
         # Insert data record
         cursor.execute('''INSERT INTO users(username, password) VALUES(?,?)''', (username, password))
@@ -109,11 +99,11 @@ def register(conn,username,password,default_items):
             put_default_lists(conn,user_id)
         # confirm and save data to DB
         conn.commit()
-        response = "201","saved to database"
+        response = "201"
         return response
-    except Exception as E:
-        write_to_log(f"yooo {E}")
-        response = "500","Error"
+    except Exception as e:
+        write_to_log(f"database Error {e}")
+        response = "500"
         conn.rollback()
         return response
 
@@ -133,7 +123,6 @@ def user_exists(conn,username):
 
 
 def put_default_lists(conn,user_id):
-    write_to_log(f"userod {user_id}")
     cursor=conn.cursor()
     for list_name in DEFAULT_LISTS:
         cursor.execute(
@@ -143,28 +132,22 @@ def put_default_lists(conn,user_id):
     return True
 
 
-def hash_password(password):
-    return str(hashlib.sha256(password.encode('utf-8')).hexdigest())
 
-def get_id(username,password):
-    conn = get_conn()
+def get_id(conn,username,password):
     cursor = conn.cursor()
-    password = hash_password(password)
     try:
         query = "SELECT id FROM users WHERE username = ? AND password = ?"
         cursor.execute(query, (username, password))
         result = cursor.fetchone()[0]
         return result
     except Exception as e:
-        write_to_log(e)
+        write_to_log(f"[Client_BL] error {e} while getting user id from DB")
         conn.rollback()
         return -1
 
-def handle_usage(user_id,today):
-    conn=get_conn()
+def handle_usage(conn,user_id,today):
     cursor=conn.cursor()
-    ai_usage=get_ai_usage_count(user_id,today)
-    write_to_log(ai_usage)
+    ai_usage=get_ai_usage_count(conn,user_id,today)
     if ai_usage ==0:
         cursor.execute("INSERT INTO ai_usage (user_id,usage_date,usage_count) VALUES (?,?,1)",
                      (user_id,today))
@@ -177,8 +160,7 @@ def handle_usage(user_id,today):
         return True,ai_usage+1
     return False,ai_usage+1
 
-def get_ai_usage_count(user_id,today):
-    conn = get_conn()
+def get_ai_usage_count(conn,user_id,today):
     cursor = conn.cursor()
     cursor.execute("SELECT usage_count FROM ai_usage WHERE user_id = ? AND usage_date = ?", (user_id, today))
     result = cursor.fetchone()
@@ -187,18 +169,12 @@ def get_ai_usage_count(user_id,today):
     else:
         return result[0]
 
-def clear_ai_usage_from_db():
-    write_to_log("cleanup")
-    conn=get_conn()
+def clear_ai_usage_from_db(conn):
     cursor=conn.cursor()
     cursor.execute("DELETE FROM ai_usage WHERE usage_date < DATE('now','-30 days')")
     conn.commit()
 
-
-
-
-def get_list_id_by_name(user_id, list_name):
-    conn = get_conn()
+def get_list_id_by_name(conn,user_id, list_name):
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -211,18 +187,17 @@ def get_list_id_by_name(user_id, list_name):
     row = cursor.fetchone()
     return row[0] if row else None
 
-def handle_ingredient_update(user_id,list_name,prev_name, curr_name):
-    list_id=get_list_id_by_name(user_id, list_name)
+def handle_ingredient_update(conn, user_id, list_name, prev_name, ingredient_name):
+    list_id=get_list_id_by_name(conn,user_id, list_name)
 
-    if  prev_name=="":
-        return create_ingredient(list_id, curr_name)
+    if prev_name!="" and prev_name != ingredient_name:
+        code= rename_ingredient(conn, list_id, prev_name, ingredient_name)
 
-    if prev_name != curr_name:
-        return rename_ingredient(list_id, prev_name, curr_name)
-    return "500"
+    else:
+        code= create_ingredient(conn, list_id, ingredient_name)
+    return code
 
-def create_ingredient(list_id, name):
-    conn = get_conn()
+def create_ingredient(conn,list_id, name):
     cursor = conn.cursor()
     try:
         if ingredient_exists(conn,list_id,name):
@@ -237,12 +212,11 @@ def create_ingredient(list_id, name):
         conn.commit()
         return "200"
     except Exception as e:
-        write_to_log(e)
+        write_to_log(f"[Client_BL] error {e} while creating ingredient in DB")
         conn.rollback()
         return "500"
 
-def rename_ingredient(list_id, prev_name, new_name):
-    conn = get_conn()
+def rename_ingredient(conn,list_id, prev_name, new_name):
     cursor = conn.cursor()
     # block duplicate names in same list
     try:
@@ -262,7 +236,7 @@ def rename_ingredient(list_id, prev_name, new_name):
         conn.commit()
         return "200"
     except Exception as e:
-        write_to_log(e)
+        write_to_log(f"[Client_BL] error {e} while renaming ingredient in DB")
         conn.rollback()
         return "500"
 
@@ -278,13 +252,11 @@ def ingredient_exists(conn,dst_list_id,ingredient):
     return False
 
 
-def transfer_ingredient(user_id,src_list,dst_list,ingredient):
-    conn = get_conn()
+def transfer_ingredient(conn,user_id,src_list,dst_list,ingredient):
     cursor = conn.cursor()
     try:
-        write_to_log("got to transf")
-        src_list_id=get_list_id_by_name(user_id,src_list)
-        dst_list_id=get_list_id_by_name(user_id,dst_list)
+        src_list_id=get_list_id_by_name(conn,user_id,src_list)
+        dst_list_id=get_list_id_by_name(conn,user_id,dst_list)
         #check if ingredient in dst list
         if ingredient_exists(conn,dst_list_id,ingredient):
             return "409"
@@ -303,19 +275,15 @@ def transfer_ingredient(user_id,src_list,dst_list,ingredient):
         return "500"
 
 
-def handle_db_list_update(user_id:int, data:list):
-    prev_name=data[0]
-    curr_name=data[1]
+def handle_list_update(conn, user_id:int, curr_name, prev_name):
     if not prev_name:
-        return create_list(user_id, curr_name)
+        return create_list(conn,user_id, curr_name)
 
     if prev_name != curr_name:
-        return rename_list(user_id, prev_name, curr_name)
-
+        return rename_list(conn,user_id, prev_name, curr_name)
     return "500"
 
-def create_list(user_id, list_name):
-    conn = get_conn()
+def create_list(conn,user_id, list_name):
     cursor = conn.cursor()
     try:
         if list_exists(conn,user_id,list_name):
@@ -342,8 +310,7 @@ def list_exists(conn,user_id,new_name):
     return False
 
 
-def rename_list(user_id, prev_name, new_name):
-    conn = get_conn()
+def rename_list(conn,user_id, prev_name, new_name):
     cursor = conn.cursor()
     if list_exists(conn,user_id,new_name):
         return "409"
@@ -362,8 +329,7 @@ def rename_list(user_id, prev_name, new_name):
     conn.commit()
     return "200"
 
-def get_lists_with_ingredients(user_id: int) -> dict[str, list[str]]:
-    conn = get_conn()
+def get_lists_with_ingredients(conn,user_id: int) -> dict[str, list[str]]:
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -385,11 +351,9 @@ def get_lists_with_ingredients(user_id: int) -> dict[str, list[str]]:
 
     return result
 
-def delete_ingredient(user_id: int, list_name: str, ingredient_name: str):
-    conn = get_conn()
+def delete_ingredient(conn,user_id: int, list_name: str, ingredient_name: str):
     cursor = conn.cursor()
     try:
-        write_to_log(user_id)
         cursor.execute(
             """
             DELETE FROM ingredients
@@ -400,12 +364,11 @@ def delete_ingredient(user_id: int, list_name: str, ingredient_name: str):
         conn.commit()
         return "200"
     except Exception as e:
-        write_to_log(e)
+        write_to_log(f"[Server_BL] error {e} while deleting ingredient from DB")
         conn.rollback()
         return "500"
 
-def remove_all_ingredients(user_id,list_name):
-    conn = get_conn()
+def remove_all_ingredients(conn,user_id,list_name):
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -413,47 +376,29 @@ def remove_all_ingredients(user_id,list_name):
         """,(user_id,list_name ))
         conn.commit()
         return "200"
-    except Exception as E:
-        write_to_log(E)
+    except Exception as e:
+        write_to_log(f"[Server_BL] error {e} while clearing user's ingredients from DB")
         conn.rollback()
         return "500"
 
-def delete_list(user_id: int, list_name: str):
-    conn = get_conn()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        DELETE FROM lists
-        WHERE name = ?
-          AND user_id = ?
-        """,
-        (list_name, user_id)
-    )
-    conn.commit()
-    return "200"
+def delete_list(conn,user_id: int, list_name: str):
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM lists
+            WHERE name = ?
+              AND user_id = ?
+            """,
+            (list_name, user_id)
+        )
+        conn.commit()
+        return "200"
+    except Exception as e:
+        write_to_log(f"[Server_BL] error {e} while deleting user's list from DB")
+        conn.rollback()
+        return "500"
 
-def close_conn():
-    conn=get_conn()
+def close_conn(conn):
     conn.close()
 
-# def handle_registration(client_socket) :
-#     data = client_socket.recv(1024).decode()
-#     registration_data = json.loads(data)
-#
-#     login = registration_data.get('login')
-#     password = registration_data.get('password')
-#
-#     if is_valid(login, password):
-#         encryption_key = generate_key().decode()
-#         client_data = {'login': login, 'encryption_key': encryption_key}
-#         save_client_data(client_data)
-#
-#         response = {'success': True, 'encryption_key': encryption_key}
-#     else:
-#         response = {'success': False, 'error': 'Invalid credentials'}
-#
-#     client_socket.send(json.dumps(response).encode())
-
-
-def is_valid(login, password):
-    return len(login) > 0 and len(password) > 0

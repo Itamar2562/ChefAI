@@ -3,3 +3,4 @@ google-genai
 cryptography
 pillow
 fpdf
+python-dotenv

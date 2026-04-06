@@ -4,26 +4,102 @@ from datetime import datetime,timedelta
 from customtkinter import *
 import json
 import fpdf
+import hashlib
 
 SERVER_IP="0.0.0.0"
 CLIENT_IP="127.0.0.1"
 PORT =8822
+
 HEADER_LEN = 4
 DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
-INGREDIENTS_CMD=["ADD","DELETE","DELETE_ALL","TRANSFER"]
-LIST_CMD=["LIST","DELETE_LIST"]
+INGREDIENTS_CMD=["ADD","DELETE","TRANSFER"]
+LIST_CMD=["ADD_LIST","DELETE_LIST","CLEAR_LIST"]
 AI_CMD=["MAKE","AI_USAGE"]
-MAX_AI_USAGE_AMOUNT=100
+MAX_AI_USAGE_AMOUNT=5
 DEFAULT_AI_RESPONSE='[{"type": "", "time": "", "name": "no available recipes", "description": "", "difficulty": "", "nutrition": "", "data": ""}]'
+ALREADY_LOGGED_IN_MASSAGE="Your account is already logged in on another device.\n Please log out from the other session before logging in here."
+
+IMG_WIDTH = 1004
+IMG_HEIGHT = 526
 
 
 Codes={
-    "200": "ok", #response
-    "201": "created", #when creating smg
-    "401": "Unauthorized", #when pw isn't right
-    "409" : "conflict", #when trying to add smg that already exists
+    "200": "successfully", #response
+    "201": "saved to database", #when creating smg
+    "401": "Wrong username or password", #when pw isn't right
+    "409" : "already exists", #when trying to add smg that already exists
     "500" :"server error" #error
 }
+
+INGREDIENTS_ERROR_MSG = "Server error with ingredient: {0} and list: {1}"
+INGREDIENTS_MESSAGES = {
+    "ADD": {
+        "200": "Ingredient: {0} added successfully to list: {1}",
+        "409": "Ingredient: {0} already exists in list: {1}",
+    },
+    "RENAME": {
+        "200": "Ingredient: {0} renamed successfully to: {1}",
+    },
+    "DELETE": {
+        "200": "Ingredient: {0} deleted successfully from list: {1}",
+    },
+    "TRANSFER": {
+        "200": "Ingredient: {0} transferred successfully to list: {1}",
+        "409": "Ingredient: {0} already exists in list: {1}",
+    },
+}
+
+LIST_ERROR_MSG = "Server error with list: {0}"
+LIST_MESSAGES = {
+    "ADD_LIST": {
+        "200": "List: {0} added successfully",
+        "409": "List: {0} already exists",
+    },
+    "RENAME_LIST": {
+        "200": "List: {0} renamed successfully to: {1}",
+    },
+    "CLEAR_LIST": {
+        "200": "List: {0} cleared successfully",
+    },
+    "DELETE_LIST": {
+        "200": "List: {0} deleted successfully",
+    },
+}
+
+LOGIN_ERROR_MSG="Server error"
+LOGIN_MESSAGES={
+    "SIGNIN":{
+        "200": "Connected",
+        "401": "Wrong username or password"
+    },
+    "REG":{
+        "409": "Username already taken",
+         "201": "Saved to database",
+    },
+}
+
+
+def create_response_dict(code, message, data=None):
+    response = {"code": code, "message": message}
+    if data:
+        response['data']=data
+    return response
+
+def get_ingredient_message(cmd,code,ingredient_name,list_name):
+    template = INGREDIENTS_MESSAGES.get(cmd, {}).get(code, INGREDIENTS_ERROR_MSG)
+    return template.format(ingredient_name, list_name)
+
+def get_list_message(cmd,code,list_name,prev_list_name=""):
+    template = LIST_MESSAGES.get(cmd, {}).get(code, LIST_ERROR_MSG)
+    if cmd=="RENAME_LIST":
+        return template.format(prev_list_name,list_name)
+    return template.format(list_name)
+
+
+def get_login_message(code,cmd):
+    write_to_log(cmd)
+    return LOGIN_MESSAGES.get(cmd,{}).get(code,LOGIN_ERROR_MSG)
+
 
 # prepare Log file
 LOG_FILE = 'LOG.log'
@@ -40,6 +116,10 @@ def get_time_greeting():
     else:
         return "Good Night"
 
+
+def hash_password(password):
+    return str(hashlib.sha256(password.encode('utf-8')).hexdigest())
+
 def write_to_log(msg):
     logging.info(msg)
     print(msg)
@@ -49,6 +129,15 @@ def seconds_until_midnight():
     tomorrow = now.date() + timedelta(days=1)
     midnight = datetime.combine(tomorrow, datetime.min.time())
     return (midnight - now).total_seconds()
+
+
+def pack_ingredient_data(list_name,ingredient,prev_ingredient=""):
+    return {"list_name":list_name,'ingredient':ingredient,'prev_ingredient':prev_ingredient}
+
+def pack_list_data(list_name,list_prev_name=""):
+    return {'list_name':list_name,'prev_list':list_prev_name}
+def pack_transfer_data(src_list,dst_list,ingredient):
+    return {'src_list':src_list,'dst_list':dst_list,'ingredient':ingredient}
 
 
 def process_for_json_loads(text: str):
