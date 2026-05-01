@@ -6,21 +6,23 @@ import json
 import fpdf
 import hashlib
 
+
 SERVER_IP="0.0.0.0"
 CLIENT_IP="127.0.0.1"
 PORT =8822
 
 HEADER_LEN = 4
 DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
-INGREDIENTS_CMD=["ADD","DELETE","TRANSFER"]
-LIST_CMD=["ADD_LIST","DELETE_LIST","CLEAR_LIST"]
+INGREDIENTS_CMD=["ADD","RENAME","DELETE","TRANSFER"]
+LIST_CMD=["ADD_LIST","RENAME_LIST","DELETE_LIST","CLEAR_LIST"]
 AI_CMD=["MAKE","AI_USAGE"]
-MAX_AI_USAGE_AMOUNT=5
-DEFAULT_AI_RESPONSE='[{"type": "", "time": "", "name": "no available recipes", "description": "", "difficulty": "", "nutrition": "", "data": ""}]'
+MAX_AI_USAGE_AMOUNT=500
+DEFAULT_AI_RESPONSE='{"recipes": [{"type": "General","time": 0,"difficulty": "Easy","name": "no available recipes","description": "","nutrition": "","data": ""}]}'
 ALREADY_LOGGED_IN_MASSAGE="Your account is already logged in on another device.\n Please log out from the other session before logging in here."
+MAX_AI_RETRIES=3
 
-IMG_WIDTH = 1004
-IMG_HEIGHT = 526
+SCREEN_WIDTH = 1004
+SCREEN_HEIGHT = 526
 
 
 Codes={
@@ -28,7 +30,8 @@ Codes={
     "201": "saved to database", #when creating smg
     "401": "Wrong username or password", #when pw isn't right
     "409" : "already exists", #when trying to add smg that already exists
-    "500" :"server error" #error
+    "500" :"server error", #error.
+    "503" : "service unavailable"
 }
 
 INGREDIENTS_ERROR_MSG = "Server error with ingredient: {0} and list: {1}"
@@ -39,6 +42,7 @@ INGREDIENTS_MESSAGES = {
     },
     "RENAME": {
         "200": "Ingredient: {0} renamed successfully to: {1}",
+        "409": "Ingredient: {0} already exists in list: {1}",
     },
     "DELETE": {
         "200": "Ingredient: {0} deleted successfully from list: {1}",
@@ -57,6 +61,7 @@ LIST_MESSAGES = {
     },
     "RENAME_LIST": {
         "200": "List: {0} renamed successfully to: {1}",
+        "409": "List: {0} already exists",
     },
     "CLEAR_LIST": {
         "200": "List: {0} cleared successfully",
@@ -78,24 +83,26 @@ LOGIN_MESSAGES={
     },
 }
 
-
+#server response dictionary
 def create_response_dict(code, message, data=None):
     response = {"code": code, "message": message}
     if data:
         response['data']=data
     return response
 
+#get server ingredients response message
 def get_ingredient_message(cmd,code,ingredient_name,list_name):
     template = INGREDIENTS_MESSAGES.get(cmd, {}).get(code, INGREDIENTS_ERROR_MSG)
     return template.format(ingredient_name, list_name)
 
+#get server lists response message
 def get_list_message(cmd,code,list_name,prev_list_name=""):
     template = LIST_MESSAGES.get(cmd, {}).get(code, LIST_ERROR_MSG)
-    if cmd=="RENAME_LIST":
+    if prev_list_name!="" and code =="200":
         return template.format(prev_list_name,list_name)
     return template.format(list_name)
 
-
+#get server login message
 def get_login_message(code,cmd):
     write_to_log(cmd)
     return LOGIN_MESSAGES.get(cmd,{}).get(code,LOGIN_ERROR_MSG)
@@ -104,18 +111,6 @@ def get_login_message(code,cmd):
 # prepare Log file
 LOG_FILE = 'LOG.log'
 logging.basicConfig(filename=LOG_FILE,level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
-
-def get_time_greeting():
-    hour=datetime.now().hour
-    if 5 <= hour < 12:
-        return "Good morning"
-    if 12 <= hour < 17:
-        return "Good Afternoon"
-    if 17 <= hour < 22:
-        return "Good evening"
-    else:
-        return "Good Night"
-
 
 def hash_password(password):
     return str(hashlib.sha256(password.encode('utf-8')).hexdigest())
@@ -132,32 +127,71 @@ def seconds_until_midnight():
 
 
 def pack_ingredient_data(list_name,ingredient,prev_ingredient=""):
-    return {"list_name":list_name,'ingredient':ingredient,'prev_ingredient':prev_ingredient}
+    data= {"list_name":list_name,'ingredient':ingredient}
+    if prev_ingredient!="":
+        data['prev_ingredient']=prev_ingredient
+    return data
 
 def pack_list_data(list_name,list_prev_name=""):
-    return {'list_name':list_name,'prev_list':list_prev_name}
+    data= {'list_name':list_name}
+    if list_prev_name!="":
+        data['prev_list']=list_prev_name
+    return data
+
 def pack_transfer_data(src_list,dst_list,ingredient):
     return {'src_list':src_list,'dst_list':dst_list,'ingredient':ingredient}
 
 
 def process_for_json_loads(text: str):
-    text = text.replace("```json", "").replace("```", "")
-    start = None
-    depth = 0
-    for i, c in enumerate(text):
-        if c == "[":
-            if start is None:
-                start = i
-            depth += 1
+    json_str = ""
+    try:
+        # Strip leading/trailing whitespace
+        text = text.strip()
 
-        elif c == "]":
-            if depth > 0:
-                depth -= 1
-                if depth == 0:
-                    json_str = text[start:i + 1]
-                    return json_str
+        # Find first [ and last ]
+        start = text.find('[')
+        end = text.rfind(']')
 
-    return DEFAULT_AI_RESPONSE
+        if start == -1 or end == -1 or start > end:
+            return json.loads(DEFAULT_AI_RESPONSE)
+
+        json_str = text[start:end + 1]
+        return json.loads(json_str)
+
+    except json.JSONDecodeError as e:
+        write_to_log(f"JSON parsing failed: {str(e)}, extracted: {json_str}")
+        return json.loads(DEFAULT_AI_RESPONSE)
+
+def process_response(text: str):
+        try:
+            data = json.loads(text)
+            data=data["recipes"]
+
+            #basic structure check
+            if not isinstance(data, list):
+                raise ValueError("Not a list")
+
+            #validate each recipe
+            required_keys = {"type", "time", "name", "description", "difficulty", "nutrition", "data"}
+            valid = []
+            for r in data:
+                if not isinstance(r, dict):
+                    continue
+
+                if set(r.keys()) != required_keys:
+                    continue
+
+                valid.append(r)
+
+            if not valid:
+                raise ValueError("No valid recipes")
+
+            return {"recipes":valid}
+
+        except Exception as e:
+            write_to_log(f"Processing failed: {str(e)}")
+            return json.loads(DEFAULT_AI_RESPONSE)
+
 
 #gets the message with header and extracts the msg
 #returns error if the msg isn't with a valid header
@@ -252,7 +286,6 @@ def encode_data(data):
         data = json.dumps(data).encode()  # turn the json args into string
     return data
 
-#currently doesn't do anything (from natalie's code) I don't think I need it (i needed it lmao)
 def check_cmd(cmd):
     if cmd in AI_CMD:
         return 1

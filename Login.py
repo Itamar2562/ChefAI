@@ -1,5 +1,6 @@
 from PIL import Image
 from Protocol import *
+from customtkinter import *
 
 class SignIn(CTkFrame):
     def __init__(self, container,disconnected_home, client_statue, callback_signin , callback_register):
@@ -73,20 +74,6 @@ class SignIn(CTkFrame):
                                      width=80,text_color="white",hover_color="#6A3DB4",
                                      font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_register)
         self._btn_register.place(x=915,y=50)
-    #get back home from sign in screen
-    def on_click_back(self):
-        self.pack_forget()
-        self._disconnected_home.pack(fill="both", expand=True)
-
-    #get to register from sign in screen
-    def on_click_register(self):
-        self.pack_forget()
-        if self._register is not None:
-            self._register.initiate_existing_ui()
-        else:
-            self._register = Register(self._container, self._disconnected_home,
-                                      self._client_status, self._callback_client_register, self.initiate_existing_ui)
-            self._register.create_ui()
 
 
     def initiate_existing_ui(self):
@@ -102,9 +89,20 @@ class SignIn(CTkFrame):
         if self._is_password_visible:
             self.toggle_password_visibility()
 
-    #add a forget function instead
-    def forget_window(self):
+    #get back home from sign in screen
+    def on_click_back(self):
         self.pack_forget()
+        self._disconnected_home.pack(fill="both", expand=True)
+
+    #get to register from sign in screen
+    def on_click_register(self):
+        self.pack_forget()
+        if self._register is not None:
+            self._register.initiate_existing_ui()
+        else:
+            self._register = Register(self._container, self._disconnected_home,
+                                      self._client_status, self._callback_client_register, self.initiate_existing_ui)
+            self._register.create_ui()
 
     def get_register(self):
         return self._register
@@ -143,10 +141,6 @@ class SignIn(CTkFrame):
             else:
                 return True
 
-    def reset_info(self):
-        self._username=""
-        self._password=""
-
     def show_message(self, msg):
         self._login_message.configure(text=msg, text_color="red")
         self._login_message.place(x=500, y=310, anchor='center')
@@ -159,28 +153,37 @@ class Register(CTkFrame):
         super().__init__(master=container)
         self._container=container
         self._disconnected_home_window=disconnected_home
+
         self._client_status=client_statue
+
         self._username=None
         self._password=None
         self._confirm_password=None
+
         self._username_entry=None
         self._password_entry=None
         self._confirm_password_entry=None
-        self._btn_back=None
-        self._login_text=None
-        self._username_text=None
-        self._password_text=None
-        self._confirm_password_text=None
-        self._btn_register=None
+
+        self._username_text = None
+        self._password_text = None
+        self._confirm_password_text = None
+
+        self._register_headline=None
         self._login_message=None
+
+        self._btn_register=None
+        self._btn_back=None
+        self._btn_signin=None
+
+
         self._btn_password_visible=None
         self._open_eye_image=None
         self._close_eye_image = None
-        self._password_visible=False
-        self._default_items_checkbox=None
-        self._btn_signin=None
-        self.callback_client_register=callback_client_register
-        self.callback_initiate_signin_ui=callback_signin_ui
+        self._is_password_visible=False
+
+        self._pantry_staples_checkbox=None
+        self._callback_client_register=callback_client_register
+        self._callback_initiate_signin_ui=callback_signin_ui
 
     #create a father class of login that has the ui pw and username
     def create_ui(self):
@@ -189,8 +192,8 @@ class Register(CTkFrame):
         self._close_eye_image=CTkImage(Image.open(r"Images\close_eye.png"),size=(25,25))
 
 
-        self._login_text=CTkLabel(master=self,text="Register",font=('Calibri', 50,"bold","underline"),text_color="#5B5FD9")
-        self._login_text.place(x=415,y=50)
+        self._register_headline=CTkLabel(master=self, text="Register", font=('Calibri', 50, "bold", "underline"), text_color="#5B5FD9")
+        self._register_headline.place(x=415, y=50)
 
         self._username_entry=CTkEntry(self, placeholder_text="enter username")
         self._username_entry.place(x=430,y=150)
@@ -212,9 +215,9 @@ class Register(CTkFrame):
 
         self._btn_register=CTkButton(self,text="Register",font=("Calibri",15),command=self.on_click_register,height=30, width=150)
         self._btn_register.place(x=425,y=310)
-        self._default_items_checkbox = CTkCheckBox(master=self, text="Add default items",font=("Calibri", 17))
-        self._default_items_checkbox.place(x=585, y=315)
-        self._default_items_checkbox.select()
+        self._pantry_staples_checkbox = CTkCheckBox(master=self, text="Add pantry staples", font=("Calibri", 17))
+        self._pantry_staples_checkbox.place(x=585, y=313)
+        self._pantry_staples_checkbox.select()
 
         self._btn_back=CTkButton(self,text="Back",height=30, width=80,text_color="white",hover_color="#6A3DB4",font=("Calibri",17),fg_color="#7C4CC2",command=self.on_click_back)
         self._btn_back.place(x=915, y=10)
@@ -225,60 +228,57 @@ class Register(CTkFrame):
         self._btn_signin=CTkButton(self,text="Sign in",height=30,width=80,text_color="white",hover_color="#6A3DB4",
                                      font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_signin)
         self._btn_signin.place(x=915,y=50)
-    #go back to home from Register
-    def on_click_back(self):
-        self.pack_forget()
-        self._disconnected_home_window.pack(fill="both", expand=True)
-
-    def reset_info(self):
-        self._password=""
-        self._username=""
-        self._confirm_password=""
-    #go back to sign in from register
-    def on_click_signin(self):
-        self.pack_forget()
-        self.callback_initiate_signin_ui()
 
     def initiate_existing_ui(self):
         def clear_entry(entry):
             if len(entry.get()) != 0:
                 entry.delete(0, "end")
+
         self._login_message.place_forget()
         self.pack(fill="both", expand=True)
-        #remove any existing strings in entry
+        # remove any existing strings in entry
         clear_entry(self._password_entry)
         clear_entry(self._username_entry)
         clear_entry(self._confirm_password_entry)
-        self._default_items_checkbox.select()
-        self.focus() #make sure mouse focus isn't left on the entries
-        if self._password_visible:
+        self._pantry_staples_checkbox.select()
+        self.focus()  # make sure mouse focus isn't left on the entries
+        if self._is_password_visible:
             self.toggle_password_visibility()
 
+    #go back to home from Register
+    def on_click_back(self):
+        self.pack_forget()
+        self._disconnected_home_window.pack(fill="both", expand=True)
+
+    #go back to sign in from register
+    def on_click_signin(self):
+        self.pack_forget()
+        self._callback_initiate_signin_ui()
 
     def on_click_register(self):
         self._username=self._username_entry.get().strip()
         self._password=self._password_entry.get()
         self._confirm_password=self._confirm_password_entry.get()
-        default_list_items=self._default_items_checkbox.get()
+        pantry_staples=self._pantry_staples_checkbox.get()
         success=self.check_register()
         if success:
             data={
                 "name":self._username,
                 "password":self._password,
-                "default":default_list_items
+                "pantry_staples":pantry_staples
             }
-            self.callback_client_register(data)
+            self._callback_client_register(data)
 
     def toggle_password_visibility(self):
         #if already visible
-        if self._password_visible:
+        if self._is_password_visible:
             self._password_entry.configure(show="*")
             self._btn_password_visible.configure( image=self._open_eye_image)
-            self._password_visible=False
+            self._is_password_visible=False
         else:
             self._password_entry.configure(show="")
             self._btn_password_visible.configure(image=self._close_eye_image)
-            self._password_visible=True
+            self._is_password_visible=True
 
     def check_register(self)->bool:
         if not self._login_message:
@@ -296,7 +296,6 @@ class Register(CTkFrame):
         "•Username must be below 32 characters")
             return False
         else:
-            #for future remove the success here (it should only show success if it saved it to db not if no errors)
             return True
 
     def print_message(self, msg, code=""):
@@ -305,9 +304,6 @@ class Register(CTkFrame):
         else:
             self._login_message.configure(text=msg, text_color="red")
         self._login_message.place(x=500, y=370, anchor='center')
-
-    def get_username(self):
-        return self._username
 
 
 

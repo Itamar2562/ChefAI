@@ -1,3 +1,4 @@
+from customtkinter import *
 from ServerBL import *
 import threading
 
@@ -20,9 +21,11 @@ class ClientList(CTkScrollableFrame):
             if self._placeholder_for_scrollbar:
                 self._placeholder_for_scrollbar.destroy()
                 self._placeholder_for_scrollbar = None
+
     def place_placeholder(self):
         self._placeholder_for_scrollbar = CTkFrame(master=self, width=1, height=1, fg_color="transparent")
         self._placeholder_for_scrollbar.pack()
+
     def clear_frames(self):
         self._client_address_to_frame_and_id_dict.clear()
         self._parent_canvas.yview_moveto(0.0)
@@ -42,7 +45,7 @@ class ClientList(CTkScrollableFrame):
     def set_internal_frame_look(self, **kwargs):
         self._internal_frame_look = kwargs
 
-    def add_client(self,ip,port,user_id):
+    def add_client_to_table(self, ip, port, user_id):
         try:
             self.destroy_placeholder()
             #create the frame
@@ -66,13 +69,13 @@ class ClientList(CTkScrollableFrame):
         except Exception as e:
             write_to_log(f"[Server_GUI] error {e} while displaying clients")
 
-    def remove_client(self,ip,port):
+    def remove_client_from_table(self,ip,port):
         frame,_=self._client_address_to_frame_and_id_dict[(ip, port)]
         self.after(0,frame.destroy)
         del self._client_address_to_frame_and_id_dict[(ip, port)]
 
 
-    def configure_user_id(self,ip,port,new_user_id):
+    def configure_user_table_id(self,ip,port,new_user_id):
         frame,id_label=self._client_address_to_frame_and_id_dict[(ip, port)]
         id_label.configure(text=f"ID: {new_user_id}")
 
@@ -80,7 +83,7 @@ class ClientList(CTkScrollableFrame):
 class ServerGUI:
 
     def __init__(self, ip, port):
-        self.server_bl=ServerBL(ip,port,self.add_client,self.remove_client,self.configure_client_id)
+        self.server_bl=ServerBL(ip, port, self.queue_client_add, self.remove_client_from_table, self.configure_client_table_id)
 
         # Attributes
         self._server_thread = None
@@ -90,17 +93,13 @@ class ServerGUI:
         self._home=None
 
         self._server_label=None
-        self._btn_start = None
-        self._btn_stop = None
 
-        self._client_list=None
+        self._client_list_label=None
         self._switch=None
 
         self.client_table=None
-        # GUI initialization
-
-
-        # Set size of the application window = image size
+        self._pending_clients = []
+        self._schedule_add_client=None
 
         self.create_ui()
 
@@ -108,7 +107,7 @@ class ServerGUI:
         self._root = CTk()
         self._root.title("Server GUI")
         set_appearance_mode("dark")
-        self._root.geometry(f'{IMG_WIDTH}x{IMG_HEIGHT}')
+        self._root.geometry(f'{SCREEN_WIDTH}x{SCREEN_HEIGHT}')
         self._root.resizable(False, False)
 
         self._container = CTkFrame(self._root)
@@ -124,8 +123,8 @@ class ServerGUI:
         self._switch=CTkSwitch(master=self._home,switch_width=300,switch_height=150,command=self.toggle_switch,text="")
         self._switch.place(x=550,y=200)
 
-        self._client_list=CTkLabel(master=self._home, text="Clients", font=('Calibri', 30, "underline"))
-        self._client_list.place(x=150, y=20)
+        self._client_list_label=CTkLabel(master=self._home, text="Clients", font=('Calibri', 30, "underline"))
+        self._client_list_label.place(x=150, y=20)
 
 
         self.client_table=ClientList(self._home, width=350, height=410, fg_color="#1E1E2E", border_width=2,
@@ -139,15 +138,37 @@ class ServerGUI:
         else:
             self.on_click_stop()
 
-    def add_client(self,ip,port,user_id):
+    def queue_client_add(self, ip, port, user_id):
+        self._pending_clients.append((ip, port, user_id))
+        if not self._schedule_add_client:
+            self._add_next_client()
+
+    def _add_next_client(self):
+        #no clients are waiting
+        if not self._pending_clients:
+            self._schedule_add_client=None
+            return
+        ip, port, user_id = self._pending_clients.pop(0)
+        self.add_client_to_table(ip, port, user_id)
+        self._schedule_add_client=self._root.after(40, self._add_next_client)
+
+    def clear_pending_queue(self):
+        if self._schedule_add_client:
+            self._root.after_cancel(self._schedule_add_client)
+            self._schedule_add_client=None
+        self._pending_clients.clear()
+
+    def add_client_to_table(self, ip, port, user_id):
         if self.client_table:
-            self.client_table.add_client(ip,port,user_id)
-    def remove_client(self,ip,port):
+            self.client_table.add_client_to_table(ip, port, user_id)
+
+    def remove_client_from_table(self, ip, port):
         if self.client_table:
-            self.client_table.remove_client(ip,port)
-    def configure_client_id(self,ip,port,new_user_id):
+            self.client_table.remove_client_from_table(ip, port)
+
+    def configure_client_table_id(self, ip, port, new_user_id):
         if self.client_table:
-            self.client_table.configure_user_id(ip,port,new_user_id)
+            self.client_table.configure_user_table_id(ip,port,new_user_id)
 
     def run(self):
         self._root.mainloop()
@@ -159,6 +180,9 @@ class ServerGUI:
     def on_click_stop(self):
         self.server_bl.stop_server()
         self.client_table.clear_frames()
+        self.clear_pending_queue()
+
+
 
 if __name__=='__main__':
     server= ServerGUI(SERVER_IP,PORT)

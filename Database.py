@@ -3,7 +3,8 @@ import sqlite3
 from Protocol import write_to_log, MAX_AI_USAGE_AMOUNT
 
 DB_NAME = "Database.db"
-DEFAULT_LISTS=["Carbs","Vegetables","Fruits","Protein","Liquids","Spices"]
+PANTRY_STAPLES= {"Carbs":[], "Vegetables":[], "Fruits":[], "Protein":[],
+                 "Liquids":["water"], "Spices":["salt","pepper"]}
 
 #just give conn to client handler maybe
 def get_conn():
@@ -11,7 +12,7 @@ def get_conn():
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-def create_response_msg_db(conn,cmd,username,password,default_items=0):
+def create_response_msg_db(conn, cmd, username, password, pantry_staples=0):
     cursor=conn.cursor()
     try:
         # connect to DB(if it doesn't exist, it will be created)
@@ -63,7 +64,7 @@ def create_response_msg_db(conn,cmd,username,password,default_items=0):
         if cmd=="SIGNIN":
            response=sign_in(conn,username,password)
         elif cmd=="REG":
-           response=register(conn,username,password,default_items)
+           response=register(conn, username, password, pantry_staples)
         return response
     except Exception as e:
         write_to_log(f"database Error {e}")
@@ -81,7 +82,7 @@ def sign_in(conn,username,password):
         response = "401"
     return response
 
-def register(conn,username,password,default_items):
+def register(conn,username,password,pantry_staples):
     cursor=conn.cursor()
     try:
         if user_exists(conn,username):
@@ -95,8 +96,8 @@ def register(conn,username,password,default_items):
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 1)",
             (user_id, "Main")
         )
-        if default_items==1:
-            put_default_lists(conn,user_id)
+        if pantry_staples==1:
+            add_pantry_staples(conn, user_id)
         # confirm and save data to DB
         conn.commit()
         response = "201"
@@ -122,13 +123,24 @@ def user_exists(conn,username):
     return False
 
 
-def put_default_lists(conn,user_id):
+def add_pantry_staples(conn, user_id):
     cursor=conn.cursor()
-    for list_name in DEFAULT_LISTS:
+    for list_name, ingredients in PANTRY_STAPLES.items():
+        # Insert the list
         cursor.execute(
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
-            (user_id, list_name))
-    conn.commit()
+            (user_id, list_name)
+        )
+
+        # Get the ID of the list we just inserted
+        list_id = cursor.lastrowid
+
+        # Insert ingredients for this list
+        for ingredient in ingredients:
+            cursor.execute(
+                "INSERT INTO ingredients (list_id, name) VALUES (?, ?)",
+                (list_id, ingredient)
+            )
     return True
 
 
@@ -145,20 +157,20 @@ def get_id(conn,username,password):
         conn.rollback()
         return -1
 
-def handle_usage(conn,user_id,today):
+def handle_ai_usage(conn, user_id, today):
     cursor=conn.cursor()
     ai_usage=get_ai_usage_count(conn,user_id,today)
     if ai_usage ==0:
         cursor.execute("INSERT INTO ai_usage (user_id,usage_date,usage_count) VALUES (?,?,1)",
                      (user_id,today))
         conn.commit()
-        return True,1
+        return 1
     elif ai_usage<MAX_AI_USAGE_AMOUNT:
         cursor.execute("UPDATE  ai_usage SET usage_count=? WHERE user_id=? AND usage_date=?",
                      (ai_usage+1,user_id, today))
         conn.commit()
-        return True,ai_usage+1
-    return False,ai_usage+1
+        return ai_usage+1
+    return ai_usage+1
 
 def get_ai_usage_count(conn,user_id,today):
     cursor = conn.cursor()
@@ -187,17 +199,8 @@ def get_list_id_by_name(conn,user_id, list_name):
     row = cursor.fetchone()
     return row[0] if row else None
 
-def handle_ingredient_update(conn, user_id, list_name, prev_name, ingredient_name):
+def create_ingredient(conn,user_id,list_name, name):
     list_id=get_list_id_by_name(conn,user_id, list_name)
-
-    if prev_name!="" and prev_name != ingredient_name:
-        code= rename_ingredient(conn, list_id, prev_name, ingredient_name)
-
-    else:
-        code= create_ingredient(conn, list_id, ingredient_name)
-    return code
-
-def create_ingredient(conn,list_id, name):
     cursor = conn.cursor()
     try:
         if ingredient_exists(conn,list_id,name):
@@ -216,7 +219,8 @@ def create_ingredient(conn,list_id, name):
         conn.rollback()
         return "500"
 
-def rename_ingredient(conn,list_id, prev_name, new_name):
+def rename_ingredient(conn,user_id,list_name, prev_name, new_name):
+    list_id=get_list_id_by_name(conn,user_id, list_name)
     cursor = conn.cursor()
     # block duplicate names in same list
     try:
@@ -251,6 +255,24 @@ def ingredient_exists(conn,dst_list_id,ingredient):
         return True
     return False
 
+def delete_ingredient(conn,user_id: int, list_name: str, ingredient_name: str):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            DELETE FROM ingredients
+            WHERE name = ? AND list_id = ( SELECT id FROM lists WHERE user_id = ?AND name = ?)
+            """,
+            (ingredient_name, user_id, list_name)
+        )
+        conn.commit()
+        return "200"
+    except Exception as e:
+        write_to_log(f"[Server_BL] error {e} while deleting ingredient from DB")
+        conn.rollback()
+        return "500"
+
+
 
 def transfer_ingredient(conn,user_id,src_list,dst_list,ingredient):
     cursor = conn.cursor()
@@ -275,26 +297,22 @@ def transfer_ingredient(conn,user_id,src_list,dst_list,ingredient):
         return "500"
 
 
-def handle_list_update(conn, user_id:int, curr_name, prev_name):
-    if not prev_name:
-        return create_list(conn,user_id, curr_name)
-
-    if prev_name != curr_name:
-        return rename_list(conn,user_id, prev_name, curr_name)
-    return "500"
-
 def create_list(conn,user_id, list_name):
+    write_to_log("got to create list")
     cursor = conn.cursor()
     try:
         if list_exists(conn,user_id,list_name):
            return "409"
+        write_to_log("doesn't exists")
         cursor.execute(
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
             (user_id, list_name)
         )
+        write_to_log("inserted")
         conn.commit()
         return "200"
-    except:
+    except Exception as e:
+        write_to_log(e)
         conn.rollback()
         return "500"
 
@@ -329,46 +347,7 @@ def rename_list(conn,user_id, prev_name, new_name):
     conn.commit()
     return "200"
 
-def get_lists_with_ingredients(conn,user_id: int) -> dict[str, list[str]]:
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT l.name, i.name
-        FROM lists l
-        LEFT JOIN ingredients i ON i.list_id = l.id
-        WHERE l.user_id = ?
-        ORDER BY l.id
-        """,
-        (user_id,)
-    )
-
-    result = {}
-    for list_name, ingredient_name in cursor.fetchall():
-        if list_name not in result:
-            result[list_name] = []
-        if ingredient_name is not None:
-            result[list_name].append(ingredient_name)
-
-    return result
-
-def delete_ingredient(conn,user_id: int, list_name: str, ingredient_name: str):
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            DELETE FROM ingredients
-            WHERE name = ? AND list_id = ( SELECT id FROM lists WHERE user_id = ?AND name = ?)
-            """,
-            (ingredient_name, user_id, list_name)
-        )
-        conn.commit()
-        return "200"
-    except Exception as e:
-        write_to_log(f"[Server_BL] error {e} while deleting ingredient from DB")
-        conn.rollback()
-        return "500"
-
-def remove_all_ingredients(conn,user_id,list_name):
+def clear_list(conn, user_id, list_name):
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -398,6 +377,29 @@ def delete_list(conn,user_id: int, list_name: str):
         write_to_log(f"[Server_BL] error {e} while deleting user's list from DB")
         conn.rollback()
         return "500"
+
+
+def get_lists_with_ingredients(conn,user_id: int) -> dict[str, list[str]]:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT l.name, i.name
+        FROM lists l
+        LEFT JOIN ingredients i ON i.list_id = l.id
+        WHERE l.user_id = ?
+        ORDER BY l.id
+        """,
+        (user_id,)
+    )
+
+    result = {}
+    for list_name, ingredient_name in cursor.fetchall():
+        if list_name not in result:
+            result[list_name] = []
+        if ingredient_name is not None:
+            result[list_name].append(ingredient_name)
+
+    return result
 
 def close_conn(conn):
     conn.close()

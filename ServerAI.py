@@ -1,0 +1,110 @@
+from google import genai
+from dotenv import load_dotenv
+import os
+from pydantic import BaseModel, Field
+from typing import Literal
+import time
+
+from Protocol import write_to_log
+
+load_dotenv()
+API_KEY = os.environ.get('API_KEY')
+client = genai.Client(api_key=API_KEY)
+
+
+class Recipe(BaseModel):
+    type: Literal["Fried", "Soup", "Dessert", "Oven", "General"] = Field(description="type of dish")
+    time: int = Field(description="total max minutes of prep + cooking")
+    difficulty: Literal["Easy", "Medium", "Hard", "Very Hard"] = Field(description="difficulty of the dish")
+    name: str = Field(description="name of the recipe")
+    description: str = Field(description="description of the recipe")
+    nutrition: str = Field(description="""
+                  string with these exact newline-separated values (use \n):
+                  calories:VALUE
+                  protein:VALUE
+                  fats:VALUE
+                  carbs:VALUE
+                  sodium:VALUE
+                  Allergens:VALUE
+                  (Write "None" or "0" if a value doesn't apply)
+                  dont forget units of measure""")
+    data: str = Field(description="""
+                 string with all preparation steps:
+                  1. Ingredients:
+                     - list each ingredient on a new line starting with "-"
+                  2. Step name:
+                     (content here)
+                  3. Step name:
+                     (content here) 
+                  and etc for all steps.
+                  Use exactly two newlines (\n\n) between steps.Include step numbers.""")
+
+
+class RecipesResponse(BaseModel):
+    recipes: list[Recipe]
+
+
+def get_response(user_prompt):
+    full_prompt = f"""
+    Generate recipes based on the following user request.
+    User input specifies: time (approximate), types (follow exactly), difficulty (follow exactly),
+                 preferences (Halal/Kosher/Vegetarian/Vegan), and ingredients (names only).
+    USER REQUEST:
+    {user_prompt}
+
+     INGREDIENT RULES (CRITICAL):
+    - ONLY use ingredients from the provided list
+    - Do NOT add salt, pepper, oil, water, butter, spices, flour, sugar, or any pantry staples
+    - If any ingredient is not in the provided list, do not use it
+    - If the ingredient list is empty, return the "no available recipes" response
+    - If ingredients cannot make a real dish, return "no available recipes" response
+    - you don't have to use all of the ingredients
+
+    NO AVAILABLE RECIPES RESPONSE (if applicable):
+    Return this exact structure if no valid recipes exist:
+    return one recipe with the name "no available recipes" and with all the other fields empty
+
+    OUTPUT REQUIREMENTS:
+    - Return as many recipes as you can with at least 6 recipes that are correct (return less if you cant find correct ones)
+    - NO field should be empty except in the "no available recipes" case
+    """
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=full_prompt,
+        config=genai.types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=RecipesResponse
+        )
+    )
+    return response.text
+
+
+x = 0
+
+
+def temp():
+    time.sleep(4)
+    global x
+    if x < 2:
+        x += 1
+        return "503 UNAVAILABLE dsds"
+    return '{"recipes": [\n  {\n    "type": "general",\n    "time": "120",\n    "difficulty": "very hard",\n    "name": "Beef Wellington with Truffle Jus",\n    "description": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddA classic, elegant dish featuring perfectly seared beef tenderloin, mushroom duxelles, and rich truffle jus, all encased in a delicate pastry.",\n    "nutrition": "calories: 850\\nprotein: 60g\\nfats: 55g\\ncarbs: 25g\\nsodium: 700mg\\nAllergens : Gluten, Dairy, Eggs, Meat",\n    "data": "1. Ingredients\\n- 800g beef tenderloin\\n- 2 tbsp vegetable oil\\n- 500g mixed mushrooms (cremini, shiitake), finely chopped\\n- 2 shallots, minced\\n- 50g butter\\n- 100ml dry white wine\\n- 2 tbsp fresh thyme, chopped\\n- 400g puff pastry, thawed\\n- 2 eggs, beaten (for egg wash)\\n- 50g foie gras p\xc3\xa2t\xc3\xa9 (optional, for richness)\\n- For the Truffle Jus:\\n- 250ml beef broth\\n- 1 tbsp cornstarch (optional, for thickening)\\n- 1 tsp black truffle oil\\n- 1g gelatin sheet (optional, for clarity)\\n\\n2. Prepare\\nPreheat oven to 200\xc2\xb0C (400\xc2\xb0F). Season beef tenderloin generously with salt and pepper. In a hot pan with 1 tbsp vegetable oil, sear the beef on all sides until deeply browned, about 2-3 minutes per side. Remove and let cool. In the same pan, melt butter and saut\xc3\xa9 minced shallots until fragrant. Add chopped mushrooms and cook until all moisture evaporates and mushrooms are deeply browned, about 10-15 minutes. Deglaze with white wine and cook until evaporated. Stir in thyme and cool completely. If using, spread foie gras p\xc3\xa2t\xc3\xa9 thinly over the cooled beef. Roll out puff pastry on a lightly floured surface into a rectangle large enough to enclose the beef. Spread the mushroom duxelles evenly over the pastry. Place the seared beef tenderloin on top of the duxelles. Carefully wrap the beef in the pastry, trimming excess and sealing the edges completely. Place seam-side down on a baking sheet. Brush generously with beaten eggs. Score the top of the pastry with a sharp knife in a decorative pattern, being careful not to cut through. For the truffle jus: If using gelatin, bloom it in cold water. Heat beef broth in a saucepan. If desired, dissolve cornstarch in a little cold water and whisk into the broth to thicken slightly. Stir in truffle oil. Remove from heat, stir in bloomed gelatin until dissolved if using.\\n \\n3. Season\\nSeason the beef tenderloin before searing. Season mushroom duxelles with salt and pepper to taste. Ensure the truffle jus is seasoned appropriately.\\n \\n4. Cook\\nBake the Wellington for 30-40 minutes, or until the pastry is golden brown and the internal temperature of the beef reaches 52-55\xc2\xb0C (125-130\xc2\xb0F) for medium-rare. Rest the Wellington for 10-15 minutes before slicing to allow juices to redistribute.\\n \\n5. Serve\\nSlice the Beef Wellington into thick portions and serve immediately with the warm truffle jus poured over or alongside.\\n \\n"\n  },\n  {\n    "type": "general",\n    "time": "120",\n    "difficulty": "very hard",\n    "name": "Seafood Terrine with Saffron Aspic",\n    "description": "An intricate terrine made with layers of delicate fish mousse and poached seafood, set in a shimmering saffron-infused aspic.",\n    "nutrition": "calories: 480\\nprotein: 35g\\nfats: 30g\\ncarbs: 10g\\nsodium: 550mg\\nAllergens : Fish, Shellfish, Dairy, Eggs, Gelatin",\n    "data": "1. Ingredients\\n- 300g white fish fillets (e.g., cod, sole), skinless, boneless\\n- 150g salmon fillet, skinless, boneless\\n- 150g large shrimp, peeled and deveined\\n- 150ml heavy cream\\n- 1 egg white\\n- 1 tbsp fresh dill, chopped\\n- Salt and white pepper to taste\\n- 4g gelatin sheets\\n- 250ml fish stock\\n- Pinch of saffron threads\\n- 1 tbsp dry white wine\\n- 50g butter\\n\\n2. Prepare\\nCut white fish into 1-inch pieces. Blend the white fish with egg white, a pinch of salt, and white pepper in a food processor until smooth. Gradually add heavy cream while blending until a light mousse forms. Stir in fresh dill. Poach salmon and shrimp separately in lightly salted water for 2-3 minutes until just cooked; cool and dice into small pieces. Soak gelatin sheets in cold water for 5 minutes. In a small saucepan, heat fish stock with saffron and white wine; bring to a simmer, then remove from heat. Squeeze excess water from gelatin sheets and stir into the warm saffron stock until dissolved. Set aside to cool slightly. Line a terrine mold (approx. 750ml) with plastic wrap, leaving an overhang. Spoon a thin layer of fish mousse into the bottom of the mold. Arrange some diced salmon and shrimp over the mousse. Alternate layers of mousse and seafood until the mold is full, ending with a mousse layer. Pour a thin layer of saffron aspic over the top. Cover the terrine with the plastic wrap overhang and refrigerate for at least 4-6 hours, or preferably overnight, until firm. Once firm, heat the remaining saffron aspic gently, and once liquid, pour another layer over the top of the chilled terrine for a clearer finish. Re-chill until set.\\n \\n3. Season\\nSeason the fish mousse and poaching water for salmon and shrimp with salt and white pepper. Taste and adjust seasoning of the saffron aspic.\\n \\n4. Cook\\nThis recipe primarily involves chilling for setting rather than traditional cooking, beyond poaching the salmon and shrimp for 2-3 minutes each and gently heating the stock for the aspic.\\n \\n5. Serve\\nInvert the terrine onto a serving platter, remove plastic wrap, and slice into thick portions using a hot, wet knife. Serve chilled with a side salad or crusty bread.\\n \\n"\n  },\n  {\n    "type": "general",\n    "time": "90",\n    "difficulty": "very hard",\n    "name": "Individual Crab and Gruyere Souffl\xc3\xa9s",\n    "description": "Light, airy, and intensely flavorful individual souffl\xc3\xa9s featuring sweet crab meat and nutty Gruyere cheese, a true test of culinary skill.",\n    "nutrition": "calories: 400\\nprotein: 25g\\nfats: 28g\\ncarbs: 8g\\nsodium: 600mg\\nAllergens : Dairy, Eggs, Shellfish, Gluten",\n    "data": "1. Ingredients\\n- 30g butter, plus extra for greasing\\n- 30g all-purpose flour\\n- 250ml milk, warmed\\n- 150g Gruyere cheese, grated\\n- 150g fresh crab meat, picked clean\\n- 4 large eggs, separated\\n- 1/4 tsp cayenne pepper\\n- Salt and white pepper to taste\\n- 1 tbsp finely chopped chives (optional)\\n\\n2. Prepare\\nPreheat oven to 190\xc2\xb0C (375\xc2\xb0F). Generously butter four 1-cup souffl\xc3\xa9 ramekins and dust with a little grated Gruyere, tapping out excess. Set aside. In a medium saucepan, melt 30g butter over medium heat. Whisk in flour and cook for 1 minute to make a roux. Gradually whisk in the warm milk until smooth and thick, forming a b\xc3\xa9chamel sauce. Remove from heat and stir in 100g of the grated Gruyere cheese until melted. Stir in the crab meat, egg yolks (one at a time, incorporating fully after each), cayenne pepper, salt, and white pepper. In a separate, clean bowl, whisk the egg whites with a pinch of salt until stiff peaks form. Gently fold about a third of the egg whites into the crab mixture to lighten it, then carefully fold in the remaining egg whites until just combined, being careful not to deflate the mixture. Divide the souffl\xc3\xa9 mixture evenly among the prepared ramekins, filling them about three-quarters full. Sprinkle the remaining 50g Gruyere on top of each souffl\xc3\xa9.\\n \\n3. Season\\nSeason the b\xc3\xa9chamel sauce and crab mixture with salt, white pepper, and cayenne pepper to taste. Ensure the egg whites are seasoned with a pinch of salt before whisking.\\n \\n4. Cook\\nPlace the ramekins on a baking sheet and bake for 20-25 minutes, or until the souffl\xc3\xa9s are puffed, golden brown, and set. Avoid opening the oven door during the first 15 minutes of baking.\\n \\n5. Serve\\nServe the souffl\xc3\xa9s immediately, straight from the oven, as they will begin to deflate quickly. Garnish with chopped chives if desired.\\n \\n"\n  },\n  {\n    "type": "general",\n    "time": "120",\n    "difficulty": "very hard",\n    "name": "Galantine of Pork with Pistachios and Cognac",\n    "description": "An elaborate deboned pork preparation, stuffed with a rich forcemeat of pork, pistachios, and herbs, poached, and chilled to perfection.",\n    "nutrition": "calories: 700\\nprotein: 45g\\nfats: 50g\\ncarbs: 10g\\nsodium: 800mg\\nAllergens : Nuts, Dairy, Eggs, Meat, Alcohol",\n    "data": "1. Ingredients\\n- 1.5 kg boneless pork shoulder, butterfly cut (or whole pork tenderloin for smaller version)\\n- 300g pork belly, cut into cubes\\n- 100g pork fatback, finely diced\\n- 100g shelled pistachios, blanched and peeled\\n- 2 eggs\\n- 50ml Cognac or brandy\\n- 2 cloves garlic, minced\\n- 2 tbsp fresh parsley, chopped\\n- 1 tbsp fresh thyme, chopped\\n- Salt, black pepper, and nutmeg to taste\\n- 2g gelatin powder (optional, for internal jelly)\\n- Vegetable oil for searing\\n- Kitchen twine and cheesecloth\\n- 1 liter chicken or vegetable stock (for poaching)\\n\\n2. Prepare\\nLay the butterflied pork shoulder flat on a cutting board, skin-side down. Season generously with salt and pepper. To make the forcemeat: Pass the pork belly, fatback, pistachios, garlic, parsley, and thyme through a meat grinder using a medium die, or finely chop by hand. In a large bowl, combine the ground mixture with eggs, Cognac, salt, pepper, and nutmeg. Mix thoroughly until well combined and slightly sticky. If using, sprinkle gelatin powder over the forcemeat. Spread the forcemeat evenly over the prepared pork shoulder, leaving a 2-inch border. Carefully roll up the pork shoulder tightly, encasing the forcemeat. Tie the galantine securely with kitchen twine at 1-inch intervals to maintain its shape. Wrap tightly in cheesecloth. Preheat oven to 160\xc2\xb0C (325\xc2\xb0F). In a large oven-safe pot or Dutch oven, sear the galantine on all sides in a little vegetable oil until browned. Add chicken stock to the pot, ensuring it comes halfway up the galantine. Bring to a simmer.\\n \\n3. Season\\nSeason the pork shoulder before spreading the forcemeat. Season the forcemeat generously with salt, pepper, and nutmeg. Adjust seasoning after mixing.\\n \\n4. Cook\\nCover the pot and braise in the preheated oven for 1.5 - 2 hours, or until an internal temperature of 75\xc2\xb0C (165\xc2\xb0F) is reached. Turn the galantine every 30 minutes. Once cooked, remove from the liquid, place on a wire rack, and place a heavy weight on top to press it as it cools. Chill in the refrigerator overnight.\\n \\n5. Serve\\nRemove twine and cheesecloth. Slice the chilled galantine into thick, even rounds. Serve cold with cornichons or a light salad.\\n \\n"\n  },\n  {\n    "type": "general",\n    "time": "110",\n    "difficulty": "very hard",\n    "name": "Deconstructed Fish & Chips with Malt Vinegar Gel and Tartar Foam",\n    "description": "A sophisticated take on a British classic, featuring perfectly fried fish, crisp potato, a tangy malt vinegar gel, and an airy tartar foam.",\n    "nutrition": "calories: 650\\nprotein: 30g\\nfats: 45g\\ncarbs: 30g\\nsodium: 900mg\\nAllergens : Fish, Eggs, Gluten (optional), Gums",\n    "data": "1. Ingredients\\n- 600g firm white fish fillets (e.g., cod, haddock)\\n- 2 large potatoes (e.g., Maris Piper, Russet), peeled and cut into thick fries\\n- 500ml vegetable oil (for frying)\\n- 100g all-purpose flour (optional, for dusting)\\n- Salt and freshly ground black pepper\\n- For Malt Vinegar Gel:\\n- 150ml malt vinegar\\n- 2g agar-agar (a type of gum)\\n- Pinch of sugar\\n- For Tartar Foam:\\n- 1 large egg yolk\\n- 1 tsp Dijon mustard\\n- 150ml vegetable oil\\n- 1 tbsp chopped capers\\n- 1 tbsp chopped gherkins\\n- 1 tbsp chopped fresh dill\\n- 50ml water\\n- 0.5g xanthan gum (a type of gum)\\n- Lemon juice to taste\\n\\n2. Prepare\\nPreheat vegetable oil in a deep fryer or heavy-bottomed pot to 150\xc2\xb0C (300\xc2\xb0F). Blanch potato fries in the oil for 5-7 minutes until slightly tender but not browned. Remove and drain, increasing oil temperature to 180\xc2\xb0C (350\xc2\xb0F). For Malt Vinegar Gel: In a small saucepan, whisk agar-agar and sugar into malt vinegar. Bring to a boil, stirring constantly for 1 minute. Pour into a shallow dish and refrigerate for at least 30 minutes until set. For Tartar Foam: Make a quick mayonnaise base by whisking egg yolk, mustard, and a pinch of salt. Gradually drizzle in 150ml vegetable oil while continuously whisking until a thick mayonnaise forms. Stir in capers, gherkins, and dill. In a separate bowl, whisk water with xanthan gum until dissolved. Whisk this mixture into the mayonnaise base along with lemon juice. Transfer to an ISI siphon or use an immersion blender to create foam. Set aside. Cut fish fillets into serving portions. Lightly dust fish with flour (if using) and season with salt and pepper. Take the set malt vinegar gel, blend it with a stick blender until smooth, and transfer to a squeeze bottle.\\n \\n3. Season\\nSeason fish fillets with salt and pepper before frying. Season the tartar foam base with salt and lemon juice to taste.\\n \\n4. Cook\\nFry the blanched potato fries at 180\xc2\xb0C (350\xc2\xb0F) for 5-8 minutes until golden and crisp. While fries are cooking, fry the seasoned fish fillets in batches at 180\xc2\xb0C (350\xc2\xb0F) for 4-6 minutes, or until golden brown and cooked through. Drain both fish and chips on paper towels.\\n \\n5. Serve\\nArrange the crispy fish and chips artfully on plates. Pipe dots or lines of malt vinegar gel around the plate. Dispense or spoon tartar foam alongside the fish. Serve immediately for optimal texture and flavor.\\n \\n"\n  }\n]}'
+
+
+def send_and_receive_ai_request(cooking_time: str, food_type: str, difficulty: str, preference: str, ingredients: str):
+    write_to_log("started working")
+    request = f"maximum time: {cooking_time}; type: {food_type}; difficulty: {difficulty}; additional preference: {preference}; Ingredients: {ingredients};"
+    write_to_log(request)
+    response = temp()
+    #response = get_response(request)
+    return response
+
+
+
+
+
+
+
+
+
+
