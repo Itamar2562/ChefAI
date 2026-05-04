@@ -1,5 +1,5 @@
 from PIL import Image
-from Protocol import *
+from Client.BL.ClientOP import *
 from customtkinter import *
 
 class SignIn(CTkFrame):
@@ -37,8 +37,8 @@ class SignIn(CTkFrame):
     def create_ui(self):
         write_to_log("ui created login")
         self.pack(fill="both", expand=True)
-        self._open_eye_image = CTkImage(Image.open(r"Images\open_eye.png"), size=(25, 25))
-        self._close_eye_image = CTkImage(Image.open(r"Images\close_eye.png"), size=(25, 25))
+        self._open_eye_image = CTkImage(Image.open(r"../IMAGES/open_eye.png"), size=(25, 25))
+        self._close_eye_image = CTkImage(Image.open(r"../IMAGES/close_eye.png"), size=(25, 25))
 
         self._login_text = CTkLabel(master=self, text="Sign in",
                                     font=('Calibri', 50,"bold","underline"),text_color="#5B5FD9")
@@ -188,9 +188,8 @@ class Register(CTkFrame):
     #create a father class of login that has the ui pw and username
     def create_ui(self):
         self.pack(fill="both", expand=True)
-        self._open_eye_image=CTkImage(Image.open(r"Images\open_eye.png"), size=(25, 25))
-        self._close_eye_image=CTkImage(Image.open(r"Images\close_eye.png"),size=(25,25))
-
+        self._open_eye_image=CTkImage(Image.open(r"../IMAGES/open_eye.png"), size=(25, 25))
+        self._close_eye_image=CTkImage(Image.open(r"../IMAGES/close_eye.png"), size=(25, 25))
 
         self._register_headline=CTkLabel(master=self, text="Register", font=('Calibri', 50, "bold", "underline"), text_color="#5B5FD9")
         self._register_headline.place(x=415, y=50)
@@ -221,9 +220,6 @@ class Register(CTkFrame):
 
         self._btn_back=CTkButton(self,text="Back",height=30, width=80,text_color="white",hover_color="#6A3DB4",font=("Calibri",17),fg_color="#7C4CC2",command=self.on_click_back)
         self._btn_back.place(x=915, y=10)
-
-
-
 
         self._btn_signin=CTkButton(self,text="Sign in",height=30,width=80,text_color="white",hover_color="#6A3DB4",
                                      font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_signin)
@@ -299,7 +295,7 @@ class Register(CTkFrame):
             return True
 
     def print_message(self, msg, code=""):
-        if code=="201":
+        if code=="200":
             self._login_message.configure(text="Success! Your account has been created.", text_color="green")
         else:
             self._login_message.configure(text=msg, text_color="red")

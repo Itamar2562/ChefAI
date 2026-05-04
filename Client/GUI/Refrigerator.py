@@ -1,6 +1,7 @@
-from Protocol import *
+from Client.COMM.ClientPRO import *
 from WidgetUtils import Lists, Ingredients,CategorizeListFrame,ErrorFrame
 from customtkinter import *
+
 class Refrigerator(CTkFrame):
     def __init__(self,container,callback_home_window,callback_send_data,callback_receive_data,
                  callback_update_user_info,user_data):
@@ -47,7 +48,7 @@ class Refrigerator(CTkFrame):
         self._categories_label.place(x=502, y=25, anchor="center")
         self._list=Lists(self, self._callback_send_data, self.receive_confirmation_code,
                          self._callback_update_user_info, self.open_list, self.close_list,
-                         self.update_list_buttons, self.destroy_categorize_frame,
+                         self.update_add_list_button, self.destroy_categorize_frame,
                          width=350, height=410, fg_color="#232338", border_width=2, border_color="#4A50C8")
 
         self._list.set_internal_frame_look(width = 3, height = 52, corner_radius = 14, fg_color ="#2F337A",
@@ -70,13 +71,12 @@ class Refrigerator(CTkFrame):
         self.after(200, self._list.initiate_first_lists, self._client_data)
 
 
-    def update_list_buttons(self, state):
+    def update_add_list_button(self, state):
         self._add_list_btn.configure(state=state)
 
     def on_click_add_list(self):
         self._list.add_list()
         self._list.move_down()
-
 
     def on_click_back(self):
         self.clear_all_lists()

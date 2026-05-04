@@ -1,5 +1,6 @@
 import threading
-from Protocol import *
+from Client.COMM.ClientPRO import *
+from Client.BL.ClientOP import *
 from PIL import Image
 from WidgetUtils import SuccessFrame,ErrorFrame
 from customtkinter import *
@@ -24,7 +25,7 @@ class Recipes(CTkFrame):
         self._specific_frame=None
         self._bottom_spacer=None
 
-        self._download_icon=CTkImage(Image.open(r"Images/download_icon.png"), size=(60, 60))
+        self._download_icon=CTkImage(Image.open(r"../IMAGES/download_icon.png"), size=(60, 60))
         self._error_frame=None
         self._success_frame=None
 

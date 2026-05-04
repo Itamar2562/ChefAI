@@ -1,8 +1,12 @@
 from customtkinter import *
-from ServerBL import *
+from Server.BL.ServerBL import *
+from Server.BL.ServerOP import *
 import threading
 
 FONT_LABEL = ("Segoe UI", 13, "bold")
+
+SCREEN_WIDTH = 1004
+SCREEN_HEIGHT = 526
 
 class ClientList(CTkScrollableFrame):
     def __init__(self, home_window, width, height, **kwargs):

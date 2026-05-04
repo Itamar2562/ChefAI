@@ -1,4 +1,5 @@
-from Protocol import *
+from Client.COMM.ClientPRO import *
+from Client.BL.ClientOP import *
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization,hashes
 from cryptography.hazmat.backends import default_backend

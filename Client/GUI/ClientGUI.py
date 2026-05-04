@@ -1,5 +1,4 @@
-from customtkinter import *
-from ClientBL import *
+from Client.BL.ClientBL import *
 from WidgetUtils import Ingredients, CategorizeListFrame, ErrorFrame
 from Login import SignIn
 from Recipes import Recipes
@@ -7,6 +6,9 @@ from Refrigerator import Refrigerator
 import threading
 from PIL import Image
 
+
+SCREEN_WIDTH = 1004
+SCREEN_HEIGHT = 526
 
 SMALL_FONT_BUTTON=("Calibri",12)
 
@@ -54,7 +56,7 @@ class ClientGUI:
 
         self._btn_make=None
         self._card_frame=None
-        self.chef_hat_image=CTkImage(Image.open(r"Images/chef_hat.png"),size=(150,150))
+        self.chef_hat_image=CTkImage(Image.open(r"../IMAGES/chef_hat.png"), size=(150, 150))
         self._chef_icon_label=None
 
         self._btn_add=None
@@ -67,8 +69,8 @@ class ClientGUI:
 
         self._ingredients=None
 
-        self._closed_refrigerator_image=CTkImage(Image.open(r"Images/closed_refrigerator.PNG"), size=(300, 400))
-        self._opened_refrigerator_image=CTkImage(Image.open(r"Images/opened_refrigerator.png"), size=(295, 395))
+        self._closed_refrigerator_image=CTkImage(Image.open(r"../IMAGES/Closed_refrigerator.PNG"), size=(300, 400))
+        self._opened_refrigerator_image=CTkImage(Image.open(r"../IMAGES/Opened_refrigerator.png"), size=(295, 395))
         self._refrigerator=None
         self._btn_refrigerator=None
 

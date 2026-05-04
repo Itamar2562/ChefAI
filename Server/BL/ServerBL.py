@@ -1,10 +1,9 @@
-import json
 import random
 import time
 
-from Protocol import *
-from Database import *
-from ServerAI import send_and_receive_ai_request
+from Server.COMM.ServerPRO import *
+from Server.COMM.Database import *
+from Server.COMM.ServerAI import send_and_receive_ai_request
 from cryptography.hazmat.primitives.asymmetric import rsa,padding
 from cryptography.hazmat.primitives import serialization,hashes
 from cryptography.fernet import Fernet
@@ -265,8 +264,9 @@ class ClientHandler(threading.Thread):
     def add_user_to_db(self,cmd,data):
         username = data['name']
         password = data['password']
+        password=hash_password(password)
         is_pantry_staples=data['pantry_staples']
-        code=create_response_msg_db(self._db_conn,cmd,username,password,is_pantry_staples)
+        code,_=create_response_msg_db(self._db_conn,cmd,username,password,is_pantry_staples)
         login_message=get_login_message(code,cmd)
         response = create_response_dict(code, login_message)
         self.send_data("LOGIN",response)
@@ -276,10 +276,11 @@ class ClientHandler(threading.Thread):
         password = data['password']
         write_to_log(username)
         write_to_log(password)
-        code = create_response_msg_db(self._db_conn, cmd, username, password)
+        code,user_id = create_response_msg_db(self._db_conn, cmd, username, password)
         login_message=get_login_message(code,cmd)
         if code=="200":
-            data = self.get_user_info(username, password)
+            self._current_id=user_id
+            data = self.get_user_info()
             response=self.handle_user_already_logged_in(code,login_message,data)
         else:
             response = create_response_dict(code, login_message)
@@ -294,8 +295,7 @@ class ClientHandler(threading.Thread):
             response = create_response_dict("409", ALREADY_LOGGED_IN_MASSAGE)
         return response
 
-    def get_user_info(self,username,password):
-        self._current_id = get_id(self._db_conn,username,password)
+    def get_user_info(self):
         lists=get_lists_with_ingredients(self._db_conn,self._current_id)
         today=date.today()
         ai_usage_count=get_ai_usage_count(self._db_conn,self._current_id,today)

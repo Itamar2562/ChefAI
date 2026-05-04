@@ -4,3 +4,5 @@ cryptography
 pillow
 fpdf
 python-dotenv
+pydantic
+bcrypt

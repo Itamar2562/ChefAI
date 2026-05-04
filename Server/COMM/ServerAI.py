@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 import time
 
-from Protocol import write_to_log
+from Server.COMM.ServerPRO import write_to_log
 
 load_dotenv()
 API_KEY = os.environ.get('API_KEY')

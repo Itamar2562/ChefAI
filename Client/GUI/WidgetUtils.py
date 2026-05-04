@@ -1,4 +1,5 @@
-from Protocol import *
+from Client.COMM.ClientPRO import *
+from Client.BL.ClientOP import *
 from customtkinter import *
 from PIL import Image
 
@@ -10,7 +11,6 @@ class ScrollableFrameBase(CTkScrollableFrame):
 
         self._animating=False
         self._is_currently_editing = False
-
 
         self._callback_update_buttons = callback_update_buttons
         self._callback_send_data = callback_send_data
@@ -545,7 +545,7 @@ class ErrorFrame(TemporaryFrame):
     def __init__(self,message,**kwargs):
         super().__init__(**kwargs)
 
-        self._icon= CTkImage(Image.open(r"Images\error_icon.png"), size=(30, 30))
+        self._icon= CTkImage(Image.open(r"../IMAGES/error_icon.png"), size=(30, 30))
         self.create_ui(message)
 
     def create_ui(self,message):
@@ -560,7 +560,7 @@ class SuccessFrame(TemporaryFrame):
     def __init__(self,message,**kwargs):
         super().__init__(**kwargs)
 
-        self._icon= CTkImage(Image.open(r"Images\success_icon.png"), size=(30, 30))
+        self._icon= CTkImage(Image.open(r"../IMAGES/success_icon.png"), size=(30, 30))
         self.create_ui(message)
 
 

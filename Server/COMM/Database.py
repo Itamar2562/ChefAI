@@ -1,6 +1,6 @@
 import sqlite3
 
-from Protocol import write_to_log, MAX_AI_USAGE_AMOUNT
+from ServerPRO import write_to_log, MAX_AI_USAGE_AMOUNT, check_hash
 
 DB_NAME = "Database.db"
 PANTRY_STAPLES= {"Carbs":[], "Vegetables":[], "Fruits":[], "Protein":[],
@@ -68,18 +68,19 @@ def create_response_msg_db(conn, cmd, username, password, pantry_staples=0):
         return response
     except Exception as e:
         write_to_log(f"database Error {e}")
-        return "500"
+        return "500",-1
 
 
 def sign_in(conn,username,password):
     cursor=conn.cursor()
-    query = "SELECT EXISTS (SELECT 1 FROM users WHERE  username = ? AND password = ?)"
-    cursor.execute(query, (username, password))
-    result = cursor.fetchone()[0]
-    if result == 1:
-        response = "200"
+    query = "SELECT * FROM users WHERE  username = ?"
+    cursor.execute(query,(username, ))
+    result = cursor.fetchone()
+    write_to_log(f"Result: {result}")
+    if result and check_hash(password,result[2]):
+        response = "200",result[0]
     else:
-        response = "401"
+        response = "401",-1
     return response
 
 def register(conn,username,password,pantry_staples):
@@ -87,7 +88,7 @@ def register(conn,username,password,pantry_staples):
     try:
         if user_exists(conn,username):
             write_to_log(f"user exists worked")
-            response="409"
+            response="409",-1
             return response
         # Insert data record
         cursor.execute('''INSERT INTO users(username, password) VALUES(?,?)''', (username, password))
@@ -100,11 +101,11 @@ def register(conn,username,password,pantry_staples):
             add_pantry_staples(conn, user_id)
         # confirm and save data to DB
         conn.commit()
-        response = "201"
+        response = "200",-1
         return response
     except Exception as e:
         write_to_log(f"database Error {e}")
-        response = "500"
+        response = "500",-1
         conn.rollback()
         return response
 
