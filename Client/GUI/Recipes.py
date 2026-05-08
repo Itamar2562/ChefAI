@@ -1,5 +1,4 @@
 import threading
-from Client.COMM.ClientPRO import *
 from Client.BL.ClientOP import *
 from PIL import Image
 from WidgetUtils import SuccessFrame,ErrorFrame
@@ -29,8 +28,8 @@ class Recipes(CTkFrame):
         self._error_frame=None
         self._success_frame=None
 
+    # Builds the recipes loading screen and starts threads for animation and server response handling.
     def create_ui(self):
-        self.pack(fill="both",expand=True)
         self._recipes_scrollable_window = CTkScrollableFrame(self,height=500,width=980)
         self._loading_label=CTkLabel(master=self, font=('Calibri', 100))
         self._headline=CTkLabel(master=self, text="Recipes",
@@ -40,31 +39,34 @@ class Recipes(CTkFrame):
                                    command=self.on_click_back)
         self._no_recipes_found_text = CTkLabel(master=self, font=("Segoe UI", 35, "bold"), text="No recipes found!")
         self._loading_text_label=CTkLabel(master=self,font=("Segoe UI", 35, "bold"), text="Loading...")
-        t1=threading.Thread(target=self.animate, daemon=True)
+        self.pack(fill="both",expand=True)
+        self.animate()
+        t1=threading.Thread(target=self.receive_message, daemon=True)
         t1.start()
-        t2=threading.Thread(target=self.receive_message, daemon=True)
-        t2.start()
 
+    # Resets and reopens the recipes screen and restarts loading/receiving threads.
     def initiate_existing_ui(self):
         self.pack(fill="both",expand=True)
         self._received_massage=False
         self._no_recipes_found_text.place_forget()
-        t1=threading.Thread(target=self.animate, daemon=True)
-        t1.start()
+        self.animate()
         t2=threading.Thread(target=self.receive_message, daemon=True)
         t2.start()
 
+    # Removes all recipe UI elements from the scrollable frame.
     def clear_recipes(self):
         for f in self._recipes_scrollable_window.winfo_children():
             f.after(0,f.destroy)
         self._bottom_spacer=None
         self._recipes_scrollable_window.place_forget()
 
+    # Displays the main recipes UI layout including header and back button.
     def create_recipes_frame(self):
         self._recipes_scrollable_window.place(x=0,y=60)
         self._headline.place(x=502, y=25, anchor="center")
         self._btn_back.place( x=920,y=10)
 
+    # Shows a confirmation dialog before returning to the main screen and clearing recipe UI.
     def on_click_back(self):
         def on_click_yes():
             self.on_click_destroy_specific_frame()
@@ -77,6 +79,7 @@ class Recipes(CTkFrame):
             self._callback_initiate_existing_home()
         def on_click_no():
             self.on_click_destroy_specific_frame()
+
         self.on_click_destroy_specific_frame()
         self._specific_frame=CTkFrame(self,border_width=3,border_color="#D9DBF8",height=200,width=300)
         self._specific_frame.place(x=400,y=200)
@@ -89,17 +92,15 @@ class Recipes(CTkFrame):
                          height=30, width=80,command=on_click_no)
         no_btn.pack(padx=6,pady=10,side="left")
 
+    # Waits for server response, handles retries, and loads recipes or error states accordingly.
     def receive_message(self):
         try:
             while True:
                 msg=self._callback_receive_msg(need_json=True)
-                write_to_log(f"msg is {msg}" )
                 data=msg['data']
-                write_to_log(f"data is {data}")
                 if msg["code"]=="503": #server retry pulse
-                    write_to_log("changed")
-                    self._loading_text_label.configure(text=f"Server busy, retrying ({data['retry']}/{MAX_AI_RETRIES})...")
-                else: #got actual message
+                    self.update_retries_label(data['retry'],data['max_retries'])
+                else:
                     remaining=data['remaining']
                     self._callback_configure_make_button(remaining)
                     self._received_massage=True
@@ -110,25 +111,26 @@ class Recipes(CTkFrame):
                         self.add_recipes(data['recipes'])
                     return
         except Exception as e:
-            write_to_log(e)
-            self.create_no_recipes_window()
+            write_to_log(f"Client_GUI] Recipes receive exception : {e}")
             self._received_massage = True
 
+    # updates retries label to show amount of retires
+    def update_retries_label(self,amount_of_retries,max_retries):
+        self._loading_text_label.configure(text=f"Server busy, retrying ({amount_of_retries}/{max_retries})...")
 
+    # Displays a message when no recipes are returned from the server.
     def create_no_recipes_window(self):
         self._headline.place(x=502, y=25, anchor="center")
         self._btn_back.place(x=920, y=10)
         self._no_recipes_found_text.place(x=350, y=250)
 
-    def shorten(self,text,max_len):
-        if len(text) <= max_len:
-            return text
-        return text[:max_len-3] + "..."
-
+    # Adds spacing at the bottom of the scrollable recipe list for better UI layout.
     def put_button_spacer(self):
         if not self._bottom_spacer:
             self._bottom_spacer = CTkFrame(self._recipes_scrollable_window, height=65, fg_color="transparent")
         self._bottom_spacer.pack(fill="x")
+
+    # Dynamically builds and displays recipe cards in the scrollable frame.
     def add_recipes(self,data,index=0):
         #create the frame
         if index>=len(data):
@@ -138,10 +140,10 @@ class Recipes(CTkFrame):
         current_frame=CTkFrame(master=self._recipes_scrollable_window,width=200,
                                height=100,border_width=3,border_color="#D9DBF8",corner_radius=15)
         current_frame.pack(pady=10, padx=2, fill="x",)
-        headline_text=self.shorten(d['name'],65)
+        headline_text=shorten(d['name'],65)
         headline=CTkLabel(master=current_frame,text=headline_text, font=('Calibri',20,"bold","underline"))
         headline.place(x=10,y=5)
-        description_text=self.shorten(d['description'],220)
+        description_text=shorten(d['description'],220)
         description=CTkLabel(master=current_frame,text=  description_text,
                              font=('Calibri',15),wraplength=550,justify="left")
         description.place(x=10,y=35)
@@ -164,6 +166,7 @@ class Recipes(CTkFrame):
 
         self.after(20,self.add_recipes,data,index+1)
 
+    # Opens a detailed view showing full recipe steps and instructions.
     def on_click_cook(self,data):
         self.on_click_destroy_specific_frame()
         self._specific_frame=CTkFrame(self)
@@ -185,6 +188,7 @@ class Recipes(CTkFrame):
                              command=self.on_click_destroy_specific_frame)
         btn_back.place(relx=1.0, x=-10, y=0, anchor="ne")
 
+    # Opens a detailed view showing nutritional information for a recipe.
     def on_click_nutrition(self,data):
         self.on_click_destroy_specific_frame()
         self._specific_frame=CTkFrame(self, width=750,border_width=3, border_color="#D9DBF8")
@@ -200,6 +204,7 @@ class Recipes(CTkFrame):
                              command=self.on_click_destroy_specific_frame)
         btn_back.place(relx=1.0, x=-10, y=10, anchor="ne")
 
+    # Saves a recipe as a PDF and shows success or error feedback.
     def save_recipe(self,data):
         succeed=save_to_pdf(data)
         if succeed:
@@ -207,7 +212,7 @@ class Recipes(CTkFrame):
         else:
             self.create_error_frame("File wasn't saved")
 
-
+    # Displays a temporary success message popup.
     def create_success_frame(self,text):
         self.forget_error_frame()
         if not self._success_frame:
@@ -219,6 +224,7 @@ class Recipes(CTkFrame):
         self._success_frame.plan_future_hide()  # reset after timer
         self._success_frame.place(x=500, y=250, anchor='center')
 
+    # Displays a temporary error message popup.
     def create_error_frame(self, text):
         self.forget_success_frame()
         if not self._error_frame:
@@ -230,19 +236,23 @@ class Recipes(CTkFrame):
         self._error_frame.plan_future_hide()  # reset after timer
         self._error_frame.place(x=500, y=250, anchor='center')
 
+    # Hides the error message popup.
     def forget_error_frame(self):
         if self._error_frame:
             self._error_frame.forget_frame()
 
+    # Hides the success message popup.
     def forget_success_frame(self):
         if self._success_frame:
             self._success_frame.forget_frame()
 
+    # Closes any open detailed popup (cook/nutrition/confirmation views).
     def on_click_destroy_specific_frame(self):
         if self._specific_frame:
             self._specific_frame.after(0,self._specific_frame.destroy)
             self._specific_frame=None
 
+    # Shows a loading animation while waiting for server response.
     def animate(self):
         self._loading_text_label.configure(text="Loading...")
         self._loading_text_label.place(x=502, y=100, anchor="center")

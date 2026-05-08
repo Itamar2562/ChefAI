@@ -30,9 +30,8 @@ class Refrigerator(CTkFrame):
 
         self._error_frame=None
 
-
+    # Builds the refrigerator UI including list panel, buttons, and category system.
     def create_ui(self):
-        self.pack(fill="both",expand=True)
         self._btn_back = CTkButton(self, text="Back", height=30, width=80, text_color="white",
                                    hover_color="#6A3DB4", font=("Calibri", 17), fg_color="#7C4CC2",
                                    command=self.on_click_back)
@@ -61,23 +60,27 @@ class Refrigerator(CTkFrame):
         no_lists_text.place(x=500,y=200)
         lists_name=CTkLabel(master=self, text="My lists", font=("Segoe UI", 22, "bold"))
         lists_name.place(x=35,y=40)
-        self.after(200, self._list.initiate_first_lists,self._client_data)
+        self.pack(fill="both",expand=True)
+        self.after(150, self._list.initiate_first_lists,self._client_data)
 
+    # Reloads the refrigerator UI with updated user data without rebuilding everything from scratch.
     def initiate_existing_ui(self, data):
         self.pack(fill="both", expand=True)
         self.update_idletasks()
         self._client_data = data
         self.close_list()
-        self.after(200, self._list.initiate_first_lists, self._client_data)
+        self.after(150, self._list.initiate_first_lists, self._client_data)
 
-
+    # Enables or disables the “add list” button depending on application state.
     def update_add_list_button(self, state):
         self._add_list_btn.configure(state=state)
 
+    # Creates a new ingredient list and moves the UI downward accordingly.
     def on_click_add_list(self):
         self._list.add_list()
         self._list.move_down()
 
+    # Returns to the home screen, clears UI state, and closes open lists and errors.
     def on_click_back(self):
         self.clear_all_lists()
         self.close_list()
@@ -85,20 +88,21 @@ class Refrigerator(CTkFrame):
         self.pack_forget()
         self._callback_home_window()
 
+    # Clears all list and ingredient UI frames from the screen.
     def clear_all_lists(self):
         if self._list:
             self._list.clear_frames()
         if self._ingredient_list:
             self._ingredient_list.clear_frames()
 
-
+    # Receives server confirmation messages and returns success/failure status.
     def receive_confirmation_code(self):
         msg = self._callback_receive_data(need_json=True)
         if msg["code"]!="200":
             self.create_error_specific_frame(msg['message'])
         return msg["code"]
 
-
+    # Opens a categorization window for moving ingredients between lists.
     def on_click_categorize(self, ingredient, ingredient_frame,list_name):
         self.destroy_categorize_frame()
         if not self._categorize_lists_frame:
@@ -109,16 +113,18 @@ class Refrigerator(CTkFrame):
         data = list(self._client_data.keys())
         self.after(50, self._categorize_lists_frame.initiate_categorize_list_frame, data)
 
+    # Closes the categorization popup frame if it is currently open.
     def destroy_categorize_frame(self,name=""):
         if self._categorize_lists_frame:
-            if name == "":
+            if name == "": # close any frame
                 self._categorize_lists_frame.destroy_categorize_frame()
                 self._categorize_lists_frame = None
-            else:
+            else: # close a specific frame
                 if name == self._categorize_lists_frame.get_ingredient_name():
                     self._categorize_lists_frame.destroy_categorize_frame()
                     self._categorize_lists_frame = None
 
+    # Handles moving an ingredient between lists and updates both server and UI.
     def on_click_select(self, ingredient, dst_list, ingredient_frame):
         self._categorize_lists_frame.stop_animating()
         src_list = self._ingredient_list.get_name()
@@ -133,6 +139,7 @@ class Refrigerator(CTkFrame):
         else:
             self.create_error_specific_frame(msg['message'])
 
+    # Displays an error popup message in the refrigerator UI.
     def create_error_specific_frame(self, message):
         if not self._error_frame:  # create frame if it doesn't exists
             self._error_frame = ErrorFrame(message, master=self, fg_color="#3b0d0d", border_color="#ff4d4d",
@@ -143,19 +150,22 @@ class Refrigerator(CTkFrame):
         self._error_frame.lift()
         self._error_frame.place(x=500, y=250, anchor='center')
 
-
+    # Hides the error popup if it is currently displayed.
     def forget_error_frame(self):
         if self._error_frame:
             self._error_frame.forget_frame()
 
+    # Enables or disables ingredient-related buttons based on state.
     def update_ingredient_buttons(self,state):
         self._btn_add_ingredient.configure(state=state)
         self._btn_clear_ingredients.configure(state=state)
 
+    # Adds a new ingredient input field to the currently open list.
     def on_click_add_ingredient(self):
         self._ingredient_list.add_ingredient()
         self._ingredient_list.move_down()
 
+    # Clears all ingredients from the currently open list and updates server state.
     def on_click_clear_ingredients(self):
         name=self._ingredient_list.get_name()
         args = pack_list_data(name)
@@ -169,6 +179,7 @@ class Refrigerator(CTkFrame):
         else:
             self.create_error_specific_frame(msg['message'])
 
+    # Closes an open ingredient list and hides its UI components.
     def close_list(self, list_name=""):
         if not self._ingredient_list:
             return
@@ -185,6 +196,7 @@ class Refrigerator(CTkFrame):
         if self._btn_clear_ingredients:
             self._btn_clear_ingredients.place_forget()
 
+    # Opens an existing ingredient list and loads its contents.
     def open_list(self,list_name):
         self.destroy_categorize_frame()
         if not self._ingredient_list:
@@ -194,6 +206,7 @@ class Refrigerator(CTkFrame):
             self.place_existing_ingredient_list(list_name)
         self.after(200, self._ingredient_list.initiate_first_ingredients, self._client_data)
 
+    # Positions an already-created ingredient list UI on screen.
     def place_existing_ingredient_list(self,list_name):
         self._ingredient_list.change_name(list_name)
         self._ingredient_list.place(x=425, y=108)
@@ -202,7 +215,7 @@ class Refrigerator(CTkFrame):
         self._list_name_label.place(x=600, y=90, anchor='w')
         self._list_name_label.configure(text=self._ingredient_list.get_name())
 
-
+    # Creates a new ingredient list UI and its associated buttons and labels.
     def create_ingredient_list(self,list_name):
         self._ingredient_list = Ingredients(list_name, self, self._callback_send_data,
                                             self.receive_confirmation_code, self.update_ingredient_buttons,

@@ -14,7 +14,7 @@ class ClientBL:
         self._fernet=None
         self._user_data={}
 
-    #connect to server
+    #Establishes a TCP connection to the server and starts the encryption handshake.
     def connect(self):
         try:
             self._client_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,7 +27,7 @@ class ClientBL:
             write_to_log("[Client_BL] attempting to connect...")
             return False
 
-    #function sends an empty msg to check connection
+    #Checks if the current socket connection is still alive by peeking at incoming data.
     def check_connection(self):
         try:
             if self._client_socket is not None:
@@ -47,7 +47,7 @@ class ClientBL:
             self._client_socket=None
             return False
 
-    #cryptography handshake
+    #Performs RSA + Fernet key exchange to securely establish a session encryption key.
     def handle_first_handshake(self):
         pem_public_key=self.receive_msg(need_bytes=True)
         public_key = serialization.load_pem_public_key(pem_public_key,backend=default_backend())
@@ -55,54 +55,63 @@ class ClientBL:
         encrypted_session_key = public_key.encrypt(session_key,padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                                                             algorithm=hashes.SHA256(),label=None))
         self.send_data("SESSION_KEY",encrypted_session_key,False)
-        write_to_log(f"session key : {session_key}")
         self._fernet = Fernet(session_key)
 
+    #Resets all user-controlled parameters back to their default values.
     def reset_parameters(self):
         self._parameters['time']=60.0
         self._parameters['type']= "general"
         self._parameters['difficulty']= ""
         self._parameters['preference'].clear()
 
-
+    #Sets the food type filter in the parameter dictionary.
     def add_food_type_parameter(self,parameter):
         self._parameters['type']=parameter
 
+    #Sets the difficulty filter for requests.
     def add_difficulty_parameter(self,parameter):
         self._parameters['difficulty']=parameter
 
+    #Toggles a preference value (adds it if missing, removes it if already present).
     def add_preference_parameters(self,parameter):
         if parameter in self._parameters['preference']:
             self._parameters['preference'].remove(parameter)
         else:
             self._parameters['preference'].append(parameter)
 
+    #Updates time parameter and returns the full parameter dictionary.
     def get_parameters(self,curr_time):
         self._parameters['time']=curr_time
         return self._parameters
 
-
+    #Requests remaining AI usage quota from the server.
     def get_ai_usage_remaining_data_from_server(self):
         self.send_data('AI_USAGE',"")
         msg=self.receive_msg(need_json=True)
         return msg
 
+    #Returns the user's stored ingredient lists.
     def get_user_data_lists(self):
         return self._user_data['lists']
 
+    #Returns remaining AI usage count from local user data.
     def get_user_data_ai_remaining_usage(self):
         return self._user_data['remaining']
 
+    #Updates stored AI usage remaining value.
     def set_user_data_ai_remaining_usage(self,remaining):
         self._user_data['remaining']=remaining
 
+    #Replaces all local user data with new data from the server.
     def set_user_data(self,user_data):
         self._user_data=user_data
 
+    #Clears all stored user data and resets parameters.
     def delete_all_user_data(self):
         self._user_data = {}
         self.reset_parameters()
 
+    #Routes different user data update commands (add, rename, delete, transfer, etc.).
     def update_user_info(self, cmd, args):
         actions = {
             "ADD": lambda: self.update_user_info_add_ingredient(
@@ -134,47 +143,54 @@ class ClientBL:
             action = actions.get(cmd)
             action()
 
+    #Adds an ingredient to a specified list.
     def update_user_info_add_ingredient(self,list_name,curr):
         lists = self._user_data['lists']
         lists[list_name].append(curr)
 
+    #Renames an ingredient inside a list.
     def update_user_info_rename_ingredient(self,list_name,prev,curr):
         lists=self._user_data['lists']
         if prev in self._user_data['lists'][list_name]:
             lists[list_name].remove(prev)
             lists[list_name].append(curr)
 
+    #Creates a new empty ingredient list.
     def update_user_info_add_list(self,curr_name):
         lists=self._user_data['lists']
         lists[curr_name] = []
 
+    #Renames an existing ingredient list while keeping its contents.
     def update_user_info_rename_list(self,prev_name,curr_name):
         lists=self._user_data['lists']
         if prev_name in lists.keys():
             lists[curr_name] = lists[prev_name]
             del lists[prev_name]
 
-
+    #Removes a specific ingredient from a list.
     def update_user_info_delete_ingredient(self,list_name,curr_name):
         lists=self._user_data['lists']
         if curr_name in lists[list_name]:
             lists[list_name].remove(curr_name)
 
+    #Clears all ingredients from a list.
     def update_user_info_clear_ingredient_list(self,list_name):
         self._user_data['lists'][list_name] = []
 
+    #Deletes an entire ingredient list.
     def update_user_info_delete_list(self,list_name):
         lists=self._user_data['lists']
         if lists:
             del lists[list_name]
 
+    #Moves an ingredient from one list to another.
     def transfer_ingredient(self,src_list,dst_list,ingredient):
         lists=self._user_data['lists']
         if ingredient in lists[src_list]:
             lists[src_list].remove(ingredient)
             lists[dst_list].append(ingredient)
 
-
+    #Receives a message from the server, optionally decrypting and/or parsing JSON or bytes.
     def receive_msg(self,need_bytes=False,need_json=False):
         if need_bytes:
             cmd, msg=receive_bytes_msg(self._client_socket)
@@ -186,15 +202,16 @@ class ClientBL:
             msg=json.loads(msg)
         return msg
 
+    #Encrypts data using the Fernet session key.
     def encrypt(self, data):
         return self._fernet.encrypt(data)
 
+    # Decrypts data using the Fernet session key.
     def decrypt(self, data):
         return self._fernet.decrypt(data)
 
-
+    #Encodes, optionally encrypts, and sends a command and its arguments to the server.
     def send_data(self,cmd,args,verbose=True):
-        write_to_log(f"data: {cmd},{args}")
         try:
             args=encode_data(args)
             cmd=encode_data(cmd)

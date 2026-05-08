@@ -4,8 +4,12 @@ import json
 import bcrypt
 from Server.COMM.ServerPRO import DEFAULT_AI_RESPONSE
 
+MAX_AI_RETRIES=5
+MAX_AI_USAGE_AMOUNT=500
+
+
 # prepare Log file
-LOG_FILE = '../../LOG.log'
+LOG_FILE = '../Server LOG.log'
 logging.basicConfig(filename=LOG_FILE,level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
 
 def hash_password(password):
@@ -26,27 +30,6 @@ def seconds_until_midnight():
     tomorrow = now.date() + timedelta(days=1)
     midnight = datetime.combine(tomorrow, datetime.min.time())
     return (midnight - now).total_seconds()
-
-
-def process_for_json_loads(text: str):
-    json_str = ""
-    try:
-        # Strip leading/trailing whitespace
-        text = text.strip()
-
-        # Find first [ and last ]
-        start = text.find('[')
-        end = text.rfind(']')
-
-        if start == -1 or end == -1 or start > end:
-            return json.loads(DEFAULT_AI_RESPONSE)
-
-        json_str = text[start:end + 1]
-        return json.loads(json_str)
-
-    except json.JSONDecodeError as e:
-        write_to_log(f"JSON parsing failed: {str(e)}, extracted: {json_str}")
-        return json.loads(DEFAULT_AI_RESPONSE)
 
 def process_response(text: str):
         try:
@@ -75,5 +58,13 @@ def process_response(text: str):
             return {"recipes":valid}
 
         except Exception as e:
-            write_to_log(f"Processing failed: {str(e)}")
+            write_to_log(f"[Server_BL] AI Processing failed: {e}")
             return json.loads(DEFAULT_AI_RESPONSE)
+
+#get one ingredient list out of user's lists
+def extract_all_ingredients(data):
+    ingredients = []
+    for key in data.keys():
+        for ing in data[key]:
+            ingredients.append(ing)
+    return ingredients

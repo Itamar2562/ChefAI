@@ -28,22 +28,25 @@ class ScrollableFrameBase(CTkScrollableFrame):
         self._btn_width=30
         self._btn_height=30
 
+    # Stores UI layout configuration for entry and button sizes inside list items.
     def configure_inner_frame(self,entry_width,entry_height,btn_width,btn_height):
         self._entry_width=entry_width
         self._entry_height=entry_height
         self._btn_width=btn_width
         self._btn_height=btn_height
 
-
+    # Adds a placeholder element to preserve scrollbar structure when no items exist.
     def destroy_placeholder(self):
         if self._placeholder_for_scrollbar:
             self._placeholder_for_scrollbar.destroy()
             self._placeholder_for_scrollbar = None
 
+    # Adds a placeholder element to preserve scrollbar structure when no items exist.
     def place_placeholder(self):
         self._placeholder_for_scrollbar = CTkFrame(master=self, width=1, height=1, fg_color="transparent")
         self._placeholder_for_scrollbar.pack()
 
+    # Switches an editable entry into a locked state and finalizes its value.
     def confirm_mode(self,current_entry:CTkEntry,current_btn:CTkButton):
         data=current_entry.get().strip()
         current_entry.delete(0,END)
@@ -55,6 +58,7 @@ class ScrollableFrameBase(CTkScrollableFrame):
         self._new_inner_frame = False
         current_entry.unbind('<Return>')
 
+    # Clears all dynamically created UI elements and resets scroll position.
     def clear_frames(self):
         self.stop_animating()
         self._parent_canvas.yview_moveto(0.0)
@@ -67,36 +71,42 @@ class ScrollableFrameBase(CTkScrollableFrame):
         self.place_placeholder()
         self.destroy_placeholder()
 
+    # Forces scroll container to scroll to the bottom after updates.
     def move_down(self):
         self._parent_canvas.update_idletasks()
         self._parent_canvas.configure(scrollregion=self._parent_canvas.bbox("all"))
         self._parent_canvas.yview_moveto(1.0)
 
-
+    # Applies consistent styling rules for dynamically created inner item frames.
     def set_internal_frame_look(self, **kwargs):
         self._internal_frame_look=kwargs
 
+    # Removes a single UI frame and resets editing state.
     def destroy_frame(self, current_frame):
         current_frame.destroy()
         self._is_currently_editing = False
         self._callback_update_buttons("normal")
 
+    # Updates internal animation state flag.
     def set_animating(self,state):
         self._animating=state
 
+    # Enables loading/animation mode and disables interaction.
     def start_animating(self):
         self._is_currently_editing=False
         self.clear_frames()
         self._callback_update_buttons("disabled")
         self.set_animating(True)
 
-
+    # Disables animation mode and cancels scheduled UI updates.
     def stop_animating(self):
         self.set_animating(False)
         if self._scheduled_animate:
             self.after_cancel(self._scheduled_animate)
             self._scheduled_animate = None
-    def is_editing_another(self,current_state):
+
+    # Checks whether user interaction should be blocked due to editing or animation.
+    def is_editing_another_or_animating(self, current_state):
         return current_state == "disabled" and self._is_currently_editing or self._animating
 
 
@@ -110,6 +120,8 @@ class Ingredients(ScrollableFrameBase):
 
         self._categorize_callback=categorize_callback
         self._name=name
+
+    # Creates a new ingredient row with edit, categorize, and delete controls.
     def add_ingredient(self):
         try:
             self.destroy_placeholder()
@@ -139,20 +151,23 @@ class Ingredients(ScrollableFrameBase):
             current_delete_btn.pack(padx=2,pady=5,side="left")
             current_entry.bind('<Return>',lambda event: self.on_click_main_btn(current_entry,current_main_btn))
         except Exception as e:
-            write_to_log(f"exception {e}")
+            write_to_log(f"[Client_GUI] adding ingredient exception: {e}")
 
+    # Opens UI for moving an ingredient into another list.
     def on_click_categorize(self,current_entry,current_frame):
         if self._is_currently_editing or self._animating:
             return
         self._categorize_callback(current_entry.get().strip(), current_frame, self._name)
 
-
+    # Returns the current ingredient list name.
     def get_name(self):
         return self._name
 
+    # Updates stored ingredient list name.
     def change_name(self,new_name):
         self._name=new_name
 
+    # Builds ingredient UI from server data with animated loading.
     def initiate_first_ingredients(self, user_data):
         self.start_animating()
         self.destroy_placeholder()
@@ -190,12 +205,13 @@ class Ingredients(ScrollableFrameBase):
                                                                                                             entry))
                 current_delete_btn.pack(padx=2,pady=5,side="left")
                 if self._animating:
-                    self._scheduled_animate = self.after(40, create_frames, i + 1, data)
+                    self._scheduled_animate = self.after(41, create_frames, i + 1, data)
 
             except Exception as e:
-                write_to_log(e)
+                write_to_log(f"[Client_GUI] loading ingredients exception: {e}")
         create_frames(0, user_data[self._name])
 
+    # Switches ingredient entry into editable state.
     def edit_mode(self, current_entry, current_btn):
         current_entry.configure(state="normal")
         current_btn.configure(text="✓", text_color="green")
@@ -205,10 +221,11 @@ class Ingredients(ScrollableFrameBase):
         current_entry.focus()
         current_entry.bind('<Return>', lambda event: self.on_click_main_btn(current_entry, current_btn))
 
+    # Handles add/edit/rename confirmation for an ingredient.
     def on_click_main_btn(self,current_entry:CTkEntry,current_btn:CTkButton):
         current_state = current_entry.cget("state")
         #do nothing if user is editing another button or animation is happening
-        if self.is_editing_another(current_state):
+        if self.is_editing_another_or_animating(current_state):
             return
         #go to edit mode
         self._callback_destroy_specific_frame()
@@ -238,7 +255,7 @@ class Ingredients(ScrollableFrameBase):
             self._callback_update_user_info(cmd, data)
 
 
-
+    # Deletes an ingredient locally or from server.
     def on_click_delete_btn(self,current_frame,current_entry):
         current_state=current_entry.cget("state")
         #do nothing if user is editing another button or animation is happening
@@ -276,6 +293,7 @@ class Lists(ScrollableFrameBase):
         self._callback_open_list=callback_open_list
         self._callback_close_list=callback_close_list
 
+    # Creates a new list row with edit, open, and delete controls.
     def add_list(self):
         try:
             self.destroy_placeholder()
@@ -306,8 +324,9 @@ class Lists(ScrollableFrameBase):
             current_entry.bind('<Return>', lambda event: self.on_click_main_btn(current_entry,
                                                                                 current_main_btn))
         except Exception as e:
-            write_to_log(f"loading exception {e}")
+            write_to_log(f"[Client_GUI] loading exception {e}")
 
+    # Builds list UI from server data with animation.
     def initiate_first_lists(self, user_data):
         if len(user_data) == 1:
             return
@@ -347,16 +366,17 @@ class Lists(ScrollableFrameBase):
                                                                                                                 entry))
                     current_delete_btn.pack(padx=3,pady=5,side="left")
                 if self._animating:
-                    self._scheduled_animate = self.after(50, create_frames, i + 1, data)
+                    self._scheduled_animate = self.after(53, create_frames, i + 1, data)
             except Exception as e:
-                write_to_log(e)
+                write_to_log(f"[Client_GUI] loading lists exception: {e}")
 
         create_frames(0, list(user_data.keys()))
 
+    # Handles add/rename confirmation for a list.
     def on_click_main_btn(self,current_entry:CTkEntry,current_btn:CTkButton):
         current_state = current_entry.cget("state")
         #user pressed to edit ->go to edit mode and do nothing else
-        if self.is_editing_another(current_state):
+        if self.is_editing_another_or_animating(current_state):
             return
             # user pressed to edit ->go to edit mode and do nothing else
         self._callback_destroy_specific_frame()
@@ -384,6 +404,7 @@ class Lists(ScrollableFrameBase):
             self._callback_update_user_info(cmd, data)
             self.on_click_open_list(current_entry)
 
+    # Switches list entry into editable mode and closes active list view.
     def edit_mode(self, current_entry, current_btn):
         self._callback_close_list()
         current_entry.configure(state="normal")
@@ -394,12 +415,14 @@ class Lists(ScrollableFrameBase):
         current_entry.focus()
         current_entry.bind('<Return>', lambda event: self.on_click_main_btn(current_entry, current_btn))
 
+    # Opens selected list and loads its ingredients.
     def on_click_open_list(self,current_entry):
         if self._is_currently_editing:
             return
         list_name=current_entry.get()
         self._callback_open_list(list_name)
 
+    # Deletes a list and updates server + UI state.
     def on_click_delete_btn(self, current_frame, current_entry):
         current_state = current_entry.cget("state")
         if self._is_currently_editing and current_state == "disabled" or self._animating:  # deleting another button while editing
@@ -443,25 +466,7 @@ class CategorizeListFrame(CTkFrame):
         self._scrollable_frame=None
         self.create_ui()
 
-    def set_animating(self,state):
-        self._is_animating=state
-    def is_animating(self):
-        return self._is_animating
-
-    def start_animating(self):
-        self._callback_destroy_error_frame()
-        self.set_animating(True)
-
-    def stop_animating(self):
-        self.set_animating(False)
-        if self._schedule_categorize_list_frame:
-            self.after_cancel(self._schedule_categorize_list_frame)
-            self._schedule_categorize_list_frame = None
-
-    def destroy_categorize_frame(self):
-        self.stop_animating()
-        self.destroy()
-
+    # Builds categorization selection interface.
     def create_ui(self):
         self._scrollable_frame = CTkScrollableFrame(master=self, width=250, height=320,
                                                     corner_radius=15
@@ -477,6 +482,32 @@ class CategorizeListFrame(CTkFrame):
         btn_back.place(relx=1.0, x=-10, y=5, anchor="ne")
         self.update_idletasks()
 
+    #set animation flag
+    def set_animating(self,state):
+        self._is_animating=state
+
+    #return animating flag
+    def is_animating(self):
+        return self._is_animating
+
+    # Enables loading/animation mode and disables interaction.
+    def start_animating(self):
+        self._callback_destroy_error_frame()
+        self.set_animating(True)
+
+    # Disables animation mode and cancels scheduled UI updates.
+    def stop_animating(self):
+        self.set_animating(False)
+        if self._schedule_categorize_list_frame:
+            self.after_cancel(self._schedule_categorize_list_frame)
+            self._schedule_categorize_list_frame = None
+
+    # Closes categorization popup and stops animation.
+    def destroy_categorize_frame(self):
+        self.stop_animating()
+        self.destroy()
+
+    # Loads available lists into selection UI with animation.
     def initiate_categorize_list_frame(self,user_data):
         try:
             if len(user_data)==1:
@@ -506,8 +537,9 @@ class CategorizeListFrame(CTkFrame):
             create_frames(0)
         except Exception as e:
             self.stop_animating()
-            write_to_log(e)
+            write_to_log(f"[Client_GUI] loading categorize lists exception: {e}")
 
+    # Returns currently selected ingredient for categorization.
     def get_ingredient_name(self):
         return self._ingredient
 
@@ -520,22 +552,27 @@ class TemporaryFrame(CTkFrame):
         self._icon=None
         self._text = None
 
+    # Cancels pending auto-hide action.
     def cancel_schedule_hide(self):
         if self._schedule_hide:
             self.after_cancel(self._schedule_hide)
 
+    # Immediately removes popup from screen.
     def forget_frame(self):
         self.cancel_schedule_hide()
         self.place_forget()
 
+    # Hides popup frame.
     def hide(self):
         self._schedule_hide = None
         self.place_forget()
 
+    # Schedules popup to disappear after timeout.
     def plan_future_hide(self):
         self.cancel_schedule_hide()
         self._schedule_hide = self.after(1200, self.hide)
 
+    # Updates popup message text.
     def change_text(self,message):
         if self._text:
             self._text.configure(text=message)
@@ -548,6 +585,7 @@ class ErrorFrame(TemporaryFrame):
         self._icon= CTkImage(Image.open(r"../IMAGES/error_icon.png"), size=(30, 30))
         self.create_ui(message)
 
+    # Builds error popup UI with icon and text.
     def create_ui(self,message):
         self._icon_label = CTkLabel(master=self, text="", image=self._icon)
         self._text = CTkLabel(master=self,font=("Segoe UI", 20, "bold"),text=message)
@@ -563,7 +601,7 @@ class SuccessFrame(TemporaryFrame):
         self._icon= CTkImage(Image.open(r"../IMAGES/success_icon.png"), size=(30, 30))
         self.create_ui(message)
 
-
+    # Builds success popup UI with icon and text.
     def create_ui(self,message):
         self._icon_label = CTkLabel(master=self, text="", image=self._icon)
         self._text = CTkLabel(master=self,font=("Segoe UI", 20, "bold"),text=message)

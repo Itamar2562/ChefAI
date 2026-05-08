@@ -1,8 +1,6 @@
-import logging
 import socket
-from datetime import datetime,timedelta
 import json
-import bcrypt
+
 
 SERVER_IP="0.0.0.0"
 PORT=8822
@@ -12,10 +10,8 @@ DATABASE_CMD=["SIGNIN","REG","SIGN_OUT"]
 INGREDIENTS_CMD=["ADD","RENAME","DELETE","TRANSFER"]
 LIST_CMD=["ADD_LIST","RENAME_LIST","DELETE_LIST","CLEAR_LIST"]
 AI_CMD=["MAKE","AI_USAGE"]
-MAX_AI_USAGE_AMOUNT=500
 DEFAULT_AI_RESPONSE='{"recipes": [{"type": "General","time": 0,"difficulty": "Easy","name": "no available recipes","description": "","nutrition": "","data": ""}]}'
 ALREADY_LOGGED_IN_MASSAGE="Your account is already logged in on another device.\n Please log out from the other session before logging in here."
-MAX_AI_RETRIES=3
 
 SCREEN_WIDTH = 1004
 SCREEN_HEIGHT = 526
@@ -79,34 +75,35 @@ LOGIN_MESSAGES={
     },
 }
 
-#server response dictionary
+
+# Builds a standardized server response dictionary with optional data payload
 def create_response_dict(code, message, data=None):
     response = {"code": code, "message": message}
     if data:
         response['data']=data
     return response
 
-#get server ingredients response message
+
+# Formats ingredient-related response messages based on command and status code
 def get_ingredient_message(cmd,code,ingredient_name,list_name):
     template = INGREDIENTS_MESSAGES.get(cmd, {}).get(code, INGREDIENTS_ERROR_MSG)
     return template.format(ingredient_name, list_name)
 
-#get server lists response message
+
+# Formats list-related response messages (add, rename, delete, clear)
 def get_list_message(cmd,code,list_name,prev_list_name=""):
     template = LIST_MESSAGES.get(cmd, {}).get(code, LIST_ERROR_MSG)
     if prev_list_name!="" and code =="200":
         return template.format(prev_list_name,list_name)
     return template.format(list_name)
 
-#get server login message
+
+# Returns user authentication / registration message based on status code
 def get_login_message(code,cmd):
-    write_to_log(cmd)
     return LOGIN_MESSAGES.get(cmd,{}).get(code,LOGIN_ERROR_MSG)
 
 
-
-#gets the message with header and extracts the msg
-#returns error if the msg isn't with a valid header
+# Receives a message using byte headers (supports raw bytes payloads for encryption)
 def receive_bytes_msg(current_socket:socket):
     cmd_header=int.from_bytes(current_socket.recv(HEADER_LEN),byteorder="big")
     cmd=""
@@ -119,6 +116,7 @@ def receive_bytes_msg(current_socket:socket):
         msg += current_socket.recv(msg_header - len(msg))
     return cmd,msg
 
+# Receives a message using string decoding and length-prefixed protocol
 def receive_msg(current_socket:socket):
     cmd_header = int.from_bytes(current_socket.recv(HEADER_LEN), byteorder="big")
     cmd = ""
@@ -132,8 +130,8 @@ def receive_msg(current_socket:socket):
     return cmd, msg
 
 
-#recives cmd and args(list) from client and turns them into
-#header_cmd_header_args
+# Packs command and payload into a length-prefixed binary message format
+#length-cmd-length-args
 def create_msg(cmd,args):
     cmd_bytes=encode_data(cmd)
     cmd_length=len(cmd).to_bytes(length=4,byteorder="big")
@@ -142,7 +140,7 @@ def create_msg(cmd,args):
     request= cmd_length+cmd_bytes+args_length+args
     return request
 
-
+# Encodes data into bytes (handles str, bytes, or JSON-serializable objects)
 def encode_data(data):
     if isinstance(data, bytes):
         return data
@@ -152,6 +150,7 @@ def encode_data(data):
         data = json.dumps(data).encode()  # turn the json args into string
     return data
 
+# Classifies incoming command into AI, database, ingredient, or list operation type
 def check_cmd(cmd):
     if cmd in AI_CMD:
         return 1

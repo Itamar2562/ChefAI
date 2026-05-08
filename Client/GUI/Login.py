@@ -1,5 +1,4 @@
 from PIL import Image
-from Client.BL.ClientOP import *
 from customtkinter import *
 
 class SignIn(CTkFrame):
@@ -34,9 +33,8 @@ class SignIn(CTkFrame):
         self._callback_client_signin = callback_signin
         self._callback_client_register = callback_register
 
+    # Builds the sign-in interface including username/password fields and buttons.
     def create_ui(self):
-        write_to_log("ui created login")
-        self.pack(fill="both", expand=True)
         self._open_eye_image = CTkImage(Image.open(r"../IMAGES/open_eye.png"), size=(25, 25))
         self._close_eye_image = CTkImage(Image.open(r"../IMAGES/close_eye.png"), size=(25, 25))
 
@@ -74,27 +72,28 @@ class SignIn(CTkFrame):
                                      width=80,text_color="white",hover_color="#6A3DB4",
                                      font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_register)
         self._btn_register.place(x=915,y=50)
+        self.pack(fill="both", expand=True)
 
-
+    # Resets and reopens the login UI with cleared fields and default state.
     def initiate_existing_ui(self):
         def clear_entry(entry):
             if len(entry.get()) != 0:
                 entry.delete(0, "end")
         self._login_message.place_forget()
         self.pack(fill="both", expand=True)
-        #remove any existing strings from the entries.
+        # remove any existing strings from the entries.
         clear_entry(self._username_entry)
         clear_entry(self._password_entry)
         self.focus() #make sure mouse focus isn't left on the entries
         if self._is_password_visible:
             self.toggle_password_visibility()
 
-    #get back home from sign in screen
+    # Returns the user from login screen back to the disconnected/home screen.
     def on_click_back(self):
         self.pack_forget()
         self._disconnected_home.pack(fill="both", expand=True)
 
-    #get to register from sign in screen
+    # Returns the Register UI instance if it exists.
     def on_click_register(self):
         self.pack_forget()
         if self._register is not None:
@@ -104,9 +103,11 @@ class SignIn(CTkFrame):
                                       self._client_status, self._callback_client_register, self.initiate_existing_ui)
             self._register.create_ui()
 
+    # Returns the Register UI instance if it exists.
     def get_register(self):
         return self._register
 
+    # Shows or hides the password text in the login input field.
     def toggle_password_visibility(self):
         # if already visible
         if self._is_password_visible:
@@ -117,7 +118,8 @@ class SignIn(CTkFrame):
             self._password_entry.configure(show="")
             self._btn_password_visible.configure(image=self._close_eye_image)
             self._is_password_visible = True
-            
+
+    # Validates login input and sends login data through callback if valid.
     def on_click_signin(self):
         self._username = self._username_entry.get().strip()
         self._password = self._password_entry.get()
@@ -129,7 +131,7 @@ class SignIn(CTkFrame):
             }
             self._callback_client_signin(data)
 
-
+    # Validates login credentials locally before sending request to server.
     def check_sign_in(self):
             if not self._client_status[0]:
                 self.show_message("Please first connect to the server")
@@ -141,10 +143,12 @@ class SignIn(CTkFrame):
             else:
                 return True
 
+    # Displays a login error or status message on the UI.
     def show_message(self, msg):
         self._login_message.configure(text=msg, text_color="red")
         self._login_message.place(x=500, y=310, anchor='center')
 
+    # Returns the entered username from the login form.
     def get_username(self):
         return self._username
 
@@ -185,9 +189,8 @@ class Register(CTkFrame):
         self._callback_client_register=callback_client_register
         self._callback_initiate_signin_ui=callback_signin_ui
 
-    #create a father class of login that has the ui pw and username
+    # Builds the registration interface including username, password, confirmation fields, and options.
     def create_ui(self):
-        self.pack(fill="both", expand=True)
         self._open_eye_image=CTkImage(Image.open(r"../IMAGES/open_eye.png"), size=(25, 25))
         self._close_eye_image=CTkImage(Image.open(r"../IMAGES/close_eye.png"), size=(25, 25))
 
@@ -224,7 +227,9 @@ class Register(CTkFrame):
         self._btn_signin=CTkButton(self,text="Sign in",height=30,width=80,text_color="white",hover_color="#6A3DB4",
                                      font=("Calibri", 17), fg_color="#7C4CC2",command=self.on_click_signin)
         self._btn_signin.place(x=915,y=50)
+        self.pack(fill="both", expand=True)
 
+    # Resets and reopens the registration UI with cleared inputs.
     def initiate_existing_ui(self):
         def clear_entry(entry):
             if len(entry.get()) != 0:
@@ -241,16 +246,17 @@ class Register(CTkFrame):
         if self._is_password_visible:
             self.toggle_password_visibility()
 
-    #go back to home from Register
+    # Returns the user from registration screen back to the disconnected/home screen.
     def on_click_back(self):
         self.pack_forget()
         self._disconnected_home_window.pack(fill="both", expand=True)
 
-    #go back to sign in from register
+    # Switches from registration screen back to sign in screen.
     def on_click_signin(self):
         self.pack_forget()
         self._callback_initiate_signin_ui()
 
+    # Validates registration input and sends registration data through callback if valid.
     def on_click_register(self):
         self._username=self._username_entry.get().strip()
         self._password=self._password_entry.get()
@@ -265,6 +271,7 @@ class Register(CTkFrame):
             }
             self._callback_client_register(data)
 
+    # Shows or hides password text in the registration fields.
     def toggle_password_visibility(self):
         #if already visible
         if self._is_password_visible:
@@ -276,6 +283,7 @@ class Register(CTkFrame):
             self._btn_password_visible.configure(image=self._close_eye_image)
             self._is_password_visible=True
 
+    # Validates registration inputs (username, password match, connection status, and rules).
     def check_register(self)->bool:
         if not self._login_message:
             self._login_message = CTkLabel(master=self, text_color="red")
@@ -285,7 +293,7 @@ class Register(CTkFrame):
         elif self._confirm_password!=self._password:
             self.print_message("Passwords Dont match!")
             return False
-        #make sure password and username are ok
+        #make sure password and username are up to standarts
         elif self._username == "" or self._password == "" or " " in self._password or len(self._username)>32:
             self.print_message("Enter a valid username and password:\n"
         "•Whitespaces are not allowed in password\n"
@@ -294,6 +302,7 @@ class Register(CTkFrame):
         else:
             return True
 
+    # Displays success or error messages for registration results.
     def print_message(self, msg, code=""):
         if code=="200":
             self._login_message.configure(text="Success! Your account has been created.", text_color="green")

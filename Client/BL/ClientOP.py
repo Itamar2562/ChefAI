@@ -3,13 +3,15 @@ from customtkinter import *
 import fpdf
 
 # prepare Log file
-LOG_FILE = '../../LOG.log'
+LOG_FILE = '../Client LOG.log'
 logging.basicConfig(filename=LOG_FILE,level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
 
+#Writes a message to the log file and also prints it to the console.
 def write_to_log(msg):
     logging.info(msg)
     print(msg)
 
+#Generates a formatted PDF file from provided data and saves it to a user-selected directory.
 def save_to_pdf(data):
     try:
         directory=open_directory_dialog(data['name'])
@@ -39,9 +41,10 @@ def save_to_pdf(data):
         pdf.output(directory)
         return True
     except Exception as e:
-        write_to_log(f"Exception {e} while saving to pdf")
+        write_to_log(f"[Client_BL] Exception {e} while saving to pdf")
         return False
 
+#Opens a file save dialog for the user to choose a location and filename for the PDF.
 def open_directory_dialog(name):
     """Opens a directory dialog to select a folder."""
     directory_path = filedialog.asksaveasfile(
@@ -55,3 +58,10 @@ def open_directory_dialog(name):
         return directory_path.name
     else:
         return "no directory"
+
+ # Truncates long text strings for UI display.
+def shorten(text,max_len):
+    if len(text) <= max_len:
+        return text
+    return text[:max_len-3] + "..."
+

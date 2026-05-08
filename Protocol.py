@@ -109,7 +109,7 @@ def get_login_message(code,cmd):
 
 
 # prepare Log file
-LOG_FILE = 'LOG.log'
+LOG_FILE = 'XLOG.log'
 logging.basicConfig(filename=LOG_FILE,level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
 
 def hash_password(password):

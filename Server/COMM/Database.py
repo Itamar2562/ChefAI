@@ -1,17 +1,18 @@
 import sqlite3
 
-from ServerPRO import write_to_log, MAX_AI_USAGE_AMOUNT, check_hash
+from Server.BL.ServerOP import write_to_log, MAX_AI_USAGE_AMOUNT, check_hash
 
-DB_NAME = "Database.db"
+DB_NAME = "../Database.db"
 PANTRY_STAPLES= {"Carbs":[], "Vegetables":[], "Fruits":[], "Protein":[],
                  "Liquids":["water"], "Spices":["salt","pepper"]}
 
-#just give conn to client handler maybe
+# Creates and returns a database connection with foreign key support enabled
 def get_conn():
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
+# Initializes database tables (users, lists, ingredients, AI usage) and routes login/register actions
 def create_response_msg_db(conn, cmd, username, password, pantry_staples=0):
     cursor=conn.cursor()
     try:
@@ -67,27 +68,26 @@ def create_response_msg_db(conn, cmd, username, password, pantry_staples=0):
            response=register(conn, username, password, pantry_staples)
         return response
     except Exception as e:
-        write_to_log(f"database Error {e}")
+        write_to_log(f"[Server_BL] Login error {e}")
         return "500",-1
 
-
+# Authenticates user by verifying username and password hash
 def sign_in(conn,username,password):
     cursor=conn.cursor()
     query = "SELECT * FROM users WHERE  username = ?"
     cursor.execute(query,(username, ))
     result = cursor.fetchone()
-    write_to_log(f"Result: {result}")
     if result and check_hash(password,result[2]):
         response = "200",result[0]
     else:
         response = "401",-1
     return response
 
+# Registers a new user, creates default list, and optionally adds pantry staples
 def register(conn,username,password,pantry_staples):
     cursor=conn.cursor()
     try:
         if user_exists(conn,username):
-            write_to_log(f"user exists worked")
             response="409",-1
             return response
         # Insert data record
@@ -104,15 +104,14 @@ def register(conn,username,password,pantry_staples):
         response = "200",-1
         return response
     except Exception as e:
-        write_to_log(f"database Error {e}")
+        write_to_log(f"[Server_BL] error {e} while registering user to DB")
         response = "500",-1
         conn.rollback()
         return response
 
 
-
+# Checks whether a username already exists in the database
 def user_exists(conn,username):
-    write_to_log("got to exists")
     cursor = conn.cursor()
     # Prevent duplicate names
     cursor.execute(
@@ -123,7 +122,7 @@ def user_exists(conn,username):
         return True
     return False
 
-
+# Adds default pantry staple ingredients and categories for a new user
 def add_pantry_staples(conn, user_id):
     cursor=conn.cursor()
     for list_name, ingredients in PANTRY_STAPLES.items():
@@ -145,7 +144,7 @@ def add_pantry_staples(conn, user_id):
     return True
 
 
-
+# Retrieves user ID based on username and password
 def get_id(conn,username,password):
     cursor = conn.cursor()
     try:
@@ -154,10 +153,11 @@ def get_id(conn,username,password):
         result = cursor.fetchone()[0]
         return result
     except Exception as e:
-        write_to_log(f"[Client_BL] error {e} while getting user id from DB")
+        write_to_log(f"[Server_BL] error {e} while getting user id from DB")
         conn.rollback()
         return -1
 
+# Tracks and updates AI usage count per user per day
 def handle_ai_usage(conn, user_id, today):
     cursor=conn.cursor()
     ai_usage=get_ai_usage_count(conn,user_id,today)
@@ -173,6 +173,7 @@ def handle_ai_usage(conn, user_id, today):
         return ai_usage+1
     return ai_usage+1
 
+# Returns current AI usage count for a user on a given day
 def get_ai_usage_count(conn,user_id,today):
     cursor = conn.cursor()
     cursor.execute("SELECT usage_count FROM ai_usage WHERE user_id = ? AND usage_date = ?", (user_id, today))
@@ -182,11 +183,13 @@ def get_ai_usage_count(conn,user_id,today):
     else:
         return result[0]
 
+# Deletes old AI usage records to keep database clean
 def clear_ai_usage_from_db(conn):
     cursor=conn.cursor()
     cursor.execute("DELETE FROM ai_usage WHERE usage_date < DATE('now','-30 days')")
     conn.commit()
 
+# Retrieves list ID based on user ID and list name
 def get_list_id_by_name(conn,user_id, list_name):
     cursor = conn.cursor()
     cursor.execute(
@@ -200,6 +203,7 @@ def get_list_id_by_name(conn,user_id, list_name):
     row = cursor.fetchone()
     return row[0] if row else None
 
+# Creates a new ingredient inside a specific list
 def create_ingredient(conn,user_id,list_name, name):
     list_id=get_list_id_by_name(conn,user_id, list_name)
     cursor = conn.cursor()
@@ -216,10 +220,11 @@ def create_ingredient(conn,user_id,list_name, name):
         conn.commit()
         return "200"
     except Exception as e:
-        write_to_log(f"[Client_BL] error {e} while creating ingredient in DB")
+        write_to_log(f"[Server_BL] error {e} while creating ingredient in DB")
         conn.rollback()
         return "500"
 
+# Renames an ingredient inside a list
 def rename_ingredient(conn,user_id,list_name, prev_name, new_name):
     list_id=get_list_id_by_name(conn,user_id, list_name)
     cursor = conn.cursor()
@@ -241,10 +246,11 @@ def rename_ingredient(conn,user_id,list_name, prev_name, new_name):
         conn.commit()
         return "200"
     except Exception as e:
-        write_to_log(f"[Client_BL] error {e} while renaming ingredient in DB")
+        write_to_log(f"[Server_BL] error {e} while renaming ingredient in DB")
         conn.rollback()
         return "500"
 
+# Checks whether an ingredient already exists in a list
 def ingredient_exists(conn,dst_list_id,ingredient):
     cursor = conn.cursor()
     cursor.execute(
@@ -256,6 +262,7 @@ def ingredient_exists(conn,dst_list_id,ingredient):
         return True
     return False
 
+# Deletes an ingredient from a list
 def delete_ingredient(conn,user_id: int, list_name: str, ingredient_name: str):
     cursor = conn.cursor()
     try:
@@ -273,8 +280,7 @@ def delete_ingredient(conn,user_id: int, list_name: str, ingredient_name: str):
         conn.rollback()
         return "500"
 
-
-
+# Moves an ingredient from one list to another
 def transfer_ingredient(conn,user_id,src_list,dst_list,ingredient):
     cursor = conn.cursor()
     try:
@@ -297,26 +303,24 @@ def transfer_ingredient(conn,user_id,src_list,dst_list,ingredient):
         conn.rollback()
         return "500"
 
-
+# Creates a new user list
 def create_list(conn,user_id, list_name):
-    write_to_log("got to create list")
     cursor = conn.cursor()
     try:
         if list_exists(conn,user_id,list_name):
            return "409"
-        write_to_log("doesn't exists")
         cursor.execute(
             "INSERT INTO lists (user_id, name, is_main) VALUES (?, ?, 0)",
             (user_id, list_name)
         )
-        write_to_log("inserted")
         conn.commit()
         return "200"
     except Exception as e:
-        write_to_log(e)
+        write_to_log(f"[Server_BL] error {e} while creating list in DB")
         conn.rollback()
         return "500"
 
+# Checks if a list already exists for a user
 def list_exists(conn,user_id,new_name):
     cursor = conn.cursor()
     # Prevent duplicate names
@@ -328,7 +332,7 @@ def list_exists(conn,user_id,new_name):
         return True
     return False
 
-
+# Renames an existing list
 def rename_list(conn,user_id, prev_name, new_name):
     cursor = conn.cursor()
     if list_exists(conn,user_id,new_name):
@@ -348,6 +352,7 @@ def rename_list(conn,user_id, prev_name, new_name):
     conn.commit()
     return "200"
 
+# Deletes all ingredients inside a list
 def clear_list(conn, user_id, list_name):
     cursor = conn.cursor()
     try:
@@ -361,6 +366,7 @@ def clear_list(conn, user_id, list_name):
         conn.rollback()
         return "500"
 
+# Deletes a user list
 def delete_list(conn,user_id: int, list_name: str):
     try:
         cursor = conn.cursor()
@@ -379,7 +385,7 @@ def delete_list(conn,user_id: int, list_name: str):
         conn.rollback()
         return "500"
 
-
+# Retrieves all user lists with their ingredients
 def get_lists_with_ingredients(conn,user_id: int) -> dict[str, list[str]]:
     cursor = conn.cursor()
     cursor.execute(
@@ -402,6 +408,7 @@ def get_lists_with_ingredients(conn,user_id: int) -> dict[str, list[str]]:
 
     return result
 
+# Closes the database connection
 def close_conn(conn):
     conn.close()
 

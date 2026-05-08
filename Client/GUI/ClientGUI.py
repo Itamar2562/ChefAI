@@ -82,6 +82,8 @@ class ClientGUI:
 
         self.create_not_signed_in_ui()
 
+    # Continuously tries to connect to the server and monitors connection status in a
+    # background thread.
     def connect_on_startup(self):
         connected_text = CTkLabel(master=self._root, text="Not connected", font=('Calibri', 22), fg_color="#333333")
         connected_text.place(x=5, y=500)
@@ -98,6 +100,7 @@ class ClientGUI:
                 was_connected = True
                 self._connection_status[0] = self._client_bl.check_connection()
 
+    # Builds the UI shown when the user is not logged in (guest/home screen).
     def create_not_signed_in_ui(self):
         self._not_logged_in_home = CTkFrame(master=self._container)
         self._not_logged_in_home.pack(fill="both", expand=True)
@@ -115,15 +118,15 @@ class ClientGUI:
                                                            text_color="#5B5FD9")
         self._signed_out_chef_ai_headline_label.place(x=502, y=200, anchor="center")
 
+    # Builds the main application UI shown after the user successfully logs in.
     def create_signed_in_ui(self):
         self._home=CTkFrame(master=self._container)
-        self._home.pack(fill="both", expand=True)
         #logged in frame
         self._chef_ai_headline_label = CTkLabel(master=self._home, text="ChefAI", font=('Calibri', 50, "bold", "underline"),
                                                 text_color="#5B5FD9")
         self._chef_ai_headline_label.place(x=502, y=25, anchor="center")
 
-        self._greeting_label = CTkLabel(master=self._home, font=('Roboto', 20), anchor='w')
+        self._greeting_label = CTkLabel(master=self._home, font=('Roboto', 20), anchor='w',text=f"Hi {self._username}!")
         self._greeting_label.place(x=5, y=0)
 
         self._card_frame = CTkFrame(self._home, width=360, height=320, corner_radius=24, fg_color="#1E1E2E",
@@ -161,7 +164,7 @@ class ClientGUI:
                                           font=("Calibri",20))
         self._cooking_time_label.place(x=502, y=440, anchor='center')
 
-        #parameters buttons
+        # parameters buttons
         self._btn_reset=CTkButton(master=self._home,text="Reset", font=SMALL_FONT_BUTTON, fg_color="#7C4CC2",
                                   hover_color="#6A3DB4", height=30,width=80,command=self.on_click_reset)
         self._btn_reset.place(x=502,y=490,anchor='center')
@@ -205,34 +208,42 @@ class ClientGUI:
         self._btn_sign_out = CTkButton(master=self._home, text="Sign out", font=("Calibri", 17), fg_color="#7C4CC2",
                                        hover_color="#6A3DB4", height=30, width=80, command=self.on_click_sign_out)
         self._btn_sign_out.place(x=915, y=10)
-        self.initiate_signed_in()
+        self._home.pack(fill="both", expand=True)
+        self.initiate_signed_in_ingredients()
 
-    def initiate_signed_in(self):
-        self._home.pack(fill="both",expand=True)
-        def receive_confirmation():
-            msg = self._client_bl.receive_msg(need_json=True)
-            if msg["code"]=="409" or msg["code"]=="500":
-                self.create_error_specific_frame(msg['message'])
-            return msg["code"]
+
+    # Initializes signed-in state, loads ingredients, and updates UI with user data.
+    def initiate_signed_in_ingredients(self):
         if not self._ingredients:
-            self._ingredients = Ingredients("Main", self._home, self._client_bl.send_data, receive_confirmation,
+            self._ingredients = Ingredients("Main", self._home, self._client_bl.send_data,
+                                            self.receive_confirmation_code,
                                             self.update_buttons, self.on_click_categorize,
                                             self._client_bl.update_user_info,
                                             self.destroy_categorize_frame, width=270, height=300,
                                             fg_color="#1E1E2E", border_width=2, border_color="#3A3F8F")
             self._ingredients.set_internal_frame_look(width=80, height=40, corner_radius=28, fg_color="#5B5FD9")
             self._ingredients.place(x=5, y=100)
-        self.update_greeting()
         user_data_lists=self._client_bl.get_user_data_lists()
-        self._home.after(300, self._ingredients.initiate_first_ingredients,user_data_lists)
+        self._home.after(150, self._ingredients.initiate_first_ingredients,user_data_lists)
 
+    def receive_confirmation_code(self):
+        msg = self._client_bl.receive_msg(need_json=True)
+        if msg["code"]=="409" or msg["code"]=="500":
+            self.create_error_specific_frame(msg['message'])
+        return msg["code"]
+
+    # Resets UI and state when the client loses connection to the server or signs out.
     def initiate_disconnected_home(self):
         self._username = ""
         self._not_logged_in_home.pack(fill="both",expand=True)
         self._client_bl.delete_all_user_data()
         self.delete_all_frames()
 
+    # Destroys all UI frames and components except the guest frame..
     def delete_all_frames(self):
+        if self._home:
+            self._root.after(0, self._home.destroy)
+            self._home = None
         if self._refrigerator:
             self._root.after(0, self._refrigerator.destroy)
             self._refrigerator=None
@@ -245,13 +256,11 @@ class ClientGUI:
         if self._recipes:
             self._root.after(0, self._recipes.destroy)
             self._recipes = None
-        if self._home:
-            self._root.after(0,self._home.destroy)
-            self._home=None
         self._ingredients=None
-        self.destroy_categorize_frame()
+        self._categorize_lists_frame=None
         self._error_frame=None
 
+    # Hides the main home screen and clears related UI elements.
     def forget_home(self):
         self._home.pack_forget()
         if self._ingredients:
@@ -259,29 +268,33 @@ class ClientGUI:
         self.destroy_categorize_frame()
         self.forget_error_frame()
 
+    # Reloads the home UI with existing data without fully recreating it.
     def initiate_existing_home(self):
         self._ingredients.clear_frames()
         self._home.pack(fill="both",expand=True)
         self._home.update()
         user_data_lists=self._client_bl.get_user_data_lists()
-        self._home.after(300,self._ingredients.initiate_first_ingredients,user_data_lists)
+        self._home.after(150,self._ingredients.initiate_first_ingredients,user_data_lists)
 
+    # Saves user data, username and starts the AI limit timer
+    def process_user_info_into_system(self, user_data):
+        self._client_bl.set_user_data(user_data)
+        self._username = self._sign_in.get_username()
+        self.schedule_usage_refresh(user_data["seconds_reset"])
+
+    # Handles login button click and initializes sign-in/register flow.
     def on_click_login(self):
         def on_click_sign_in(data):
             cmd="SIGNIN"
             self._client_bl.send_data(cmd,data)
             msg=self._client_bl.receive_msg(need_json=True)
-            self._sign_in.show_message(msg["message"])
             if msg["code"] == "200":
                 user_data=msg["data"]
-                self._client_bl.set_user_data(user_data)
-                self._username=self._sign_in.get_username()
-                self.schedule_usage_refresh(user_data["seconds_reset"])
                 self._sign_in.pack_forget()
-                if not self._home:
-                    self.create_signed_in_ui()
-                else:
-                    self.initiate_existing_home()
+                self.process_user_info_into_system(user_data)
+                self.create_signed_in_ui()
+            else:
+                self._sign_in.show_message(msg["message"])
 
         def on_click_register(data):
             self._register = self._sign_in.get_register()
@@ -298,14 +311,17 @@ class ClientGUI:
         else:
             self._sign_in.initiate_existing_ui()
 
+    # Logs the user out and resets the application to guest state.
     def on_click_sign_out(self):
         self._client_bl.send_data("SIGN_OUT","")
         self.initiate_disconnected_home()
 
+    # Enables or disables add/clear ingredient buttons.
     def update_buttons(self, state):
         self._btn_add.configure(state=state)
         self._btn_clear.configure(state=state)
 
+    # Clears all ingredients in the main list and updates server + local state.
     def on_click_clear_btn(self):
         args= pack_list_data("Main")
         self._client_bl.send_data("CLEAR_LIST", args)
@@ -318,10 +334,12 @@ class ClientGUI:
         else:
             self.create_error_specific_frame(msg['message'])
 
+    # Triggers adding a new ingredient input field.
     def on_click_add(self):
         self._ingredients.add_ingredient()
         self._ingredients.move_down()
 
+    # Opens a categorization UI for moving ingredients between lists.
     def on_click_categorize(self, ingredient, ingredient_frame,list_name):
         self.destroy_categorize_frame()
         self._categorize_lists_frame = CategorizeListFrame(self._home, ingredient, ingredient_frame, list_name,
@@ -332,6 +350,7 @@ class ClientGUI:
         data=list(user_data_lists.keys())
         self._home.after(50, self._categorize_lists_frame.initiate_categorize_list_frame, data)
 
+    # Closes the categorization popup frame if it is active.
     def destroy_categorize_frame(self,name=""):
         if self._categorize_lists_frame:
             if name=="":
@@ -342,6 +361,7 @@ class ClientGUI:
                     self._categorize_lists_frame.destroy_categorize_frame()
                     self._categorize_lists_frame = None
 
+    # Transfers an ingredient to another list and updates server and UI.
     def on_click_select(self,ingredient,dst_list,ingredient_frame):
         cmd="TRANSFER"
         args=pack_transfer_data("Main",dst_list,ingredient)
@@ -354,6 +374,7 @@ class ClientGUI:
         else:
             self.create_error_specific_frame(msg["message"])
 
+    # Displays or updates an error message popup in the UI.
     def create_error_specific_frame(self,message):
         if not self._error_frame: #create frame if it doesn't exists
             self._error_frame=ErrorFrame(message,master=self._home, fg_color="#3b0d0d", border_color="#ff4d4d",
@@ -363,11 +384,12 @@ class ClientGUI:
         self._error_frame.plan_future_hide() # reset after timer
         self._error_frame.place(x=500, y=250,anchor='center')
 
+    # Hides the error message frame.
     def forget_error_frame(self):
         if self._error_frame:
             self._error_frame.forget_frame()
 
-
+    # Sends selected parameters to the server to generate recipes.
     def on_click_make(self):
         self._client_bl.add_food_type_parameter(self._food_types.get())
         self._client_bl.add_difficulty_parameter(self._difficulties_options_menu.get())
@@ -383,9 +405,11 @@ class ClientGUI:
         else:
             self._recipes.initiate_existing_ui()
 
+    # Schedules periodic refresh of AI usage quota.
     def schedule_usage_refresh(self,seconds):
         self._root.after(int(seconds*1000), self.refresh_usage)
 
+    # Requests updated AI usage data from server and updates UI state.
     def refresh_usage(self):
         msg = self._client_bl.get_ai_usage_remaining_data_from_server()
         data = msg["data"]
@@ -394,13 +418,15 @@ class ClientGUI:
             self.configure_make_button_state(remaining)
         self.schedule_usage_refresh(data["seconds_reset"])  # schedule next midnight
 
+    # Enables/disables the "MAKE" button based on remaining AI usage.
     def configure_make_button_state(self, remaining):
         state = "normal" if remaining > 0 else "disabled"
         self._client_bl.set_user_data_ai_remaining_usage(remaining)
-        if self._btn_make:
-            (self._btn_make.configure(
-                text=f"MAKE!✨ Remaining: {remaining}",state=state,width=300,height=80,corner_radius=28))
+        if self._btn_make and self._btn_make.winfo_exists():
+            self._root.after(0, lambda: self._btn_make.configure
+            (text=f"MAKE!✨ Remaining: {remaining}", state=state))
 
+    # Opens the refrigerator/ingredient storage UI.
     def on_click_refrigerator(self):
         self.forget_home()
         self.destroy_categorize_frame()
@@ -413,10 +439,7 @@ class ClientGUI:
         else:
             self._refrigerator.initiate_existing_ui(user_data_lists)
 
-    def update_greeting(self):
-        name=self._username
-        self._greeting_label.configure(text=f"Hi {name}!")
-
+    # Resets all filters, buttons, and parameters to default state.
     def on_click_reset(self):
         def reset_button(button):
             button.configure(fg_color=BTN_NORMAL_FG_COLOR, hover=True, text_color=BTN_NORMAL_TEXT_COLOR)
@@ -430,6 +453,7 @@ class ClientGUI:
         self._cooking_time_label.configure(text="Cooking time: 60.0min")
         self._client_bl.reset_parameters()
 
+    # Toggles a button’s active/inactive visual state.
     def switch_btn_state_color(self, button):
         fg_color=button.cget('fg_color')
         if fg_color==BTN_NORMAL_FG_COLOR:
@@ -437,19 +461,27 @@ class ClientGUI:
         else:
             button.configure(fg_color=BTN_NORMAL_FG_COLOR,hover=True,text_color=BTN_NORMAL_TEXT_COLOR)
 
+    # Toggles vegetarian filter preference.
     def on_click_vegetarian(self):
         self.switch_btn_state_color(self._btn_vegetarian)
         self._client_bl.add_preference_parameters("vegetarian")
+
+    # Toggles vegan filter preference.
     def on_click_vegan(self):
         self.switch_btn_state_color(self._btn_vegan)
         self._client_bl.add_preference_parameters("vegan")
+
+    # Toggles halal filter preference.
     def on_click_halal(self):
         self.switch_btn_state_color(self._btn_halal)
         self._client_bl.add_preference_parameters("halal")
+
+    # Toggles kosher filter preference.
     def on_click_kosher(self):
         self.switch_btn_state_color(self._btn_kosher)
         self._client_bl.add_preference_parameters("kosher")
 
+    # Updates displayed cooking time when slider value changes.
     def change_slider_time(self,value):
         self._cooking_time_label.configure(text=f"Cooking time: {value}min")
 
